@@ -7,8 +7,8 @@
 import re
 from datetime import datetime
 
-from ..knowledge import classify_type, classify_urgency
-from ..llm import llm
+from ..knowledge import KB, classify_type, classify_urgency
+from ..llm import extract_json, llm
 from ..state import FacilityState, Ticket
 
 
@@ -22,18 +22,25 @@ def intake_agent(state: FacilityState) -> dict:
     raw = state["ticket"]["raw"]
     reporter = state["ticket"].get("reporter", "系统巡检")
 
+    # 规则值作为默认，LLM 仅在解析有效时覆盖，保证任何情况下都有合法结论
+    ttype = classify_type(raw)
+    urgency = classify_urgency(raw)
     if llm.available:
         sys_prompt = (
             "你是物业工单受理助手。从报修文本中抽取：故障类型(电梯/空调/漏水/照明/"
-            "消防/门禁/保洁/绿化)、紧急程度(high/medium/low)、位置。只返回 JSON。"
+            "消防/门禁/保洁/绿化)、紧急程度(high/medium/low)。只返回 JSON："
+            '{"type": "...", "urgency": "..."}。'
         )
         out = llm.complete(sys_prompt, raw)
-        # 真实场景中这里会做 JSON 解析；MVP 演示以规则为准保证稳定。
-        ttype = classify_type(raw)
-        urgency = classify_urgency(raw)
-    else:
-        ttype = classify_type(raw)
-        urgency = classify_urgency(raw)
+        parsed = extract_json(out)
+        if parsed:
+            cand_type = str(parsed.get("type", "")).strip().lower()
+            cand_urg = str(parsed.get("urgency", "")).strip().lower()
+            # 只在模型输出落在合法枚举内才采纳，否则保留规则值，避免脏数据
+            if cand_type in KB:
+                ttype = cand_type
+            if cand_urg in ("high", "medium", "low"):
+                urgency = cand_urg
 
     location = state["ticket"].get("location_hint") or _guess_location(raw)
     ticket: Ticket = {

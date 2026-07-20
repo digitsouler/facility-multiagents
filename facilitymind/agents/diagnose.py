@@ -6,7 +6,7 @@
 
 from ..dataio import load_tickets
 from ..knowledge import KB
-from ..llm import llm
+from ..llm import extract_json, llm
 from ..state import Diagnosis, FacilityState
 
 
@@ -47,7 +47,18 @@ def diagnose_agent(state: FacilityState) -> dict:
             "你是设施管理诊断专家。根据故障类型与历史，推断根因与处置建议。"
             "只返回 JSON：{root_cause, recommended_action, confidence}。"
         )
-        llm.complete(sys_prompt, ticket["raw"])
+        out = llm.complete(sys_prompt, ticket["raw"])
+        parsed = extract_json(out)
+        if parsed and parsed.get("root_cause") and parsed.get("recommended_action"):
+            # 模型推理有效则采用，否则保留 KB 兜底值
+            root_cause = str(parsed["root_cause"])
+            recommended_action = str(parsed["recommended_action"])
+            try:
+                conf = float(parsed.get("confidence", confidence))
+                if 0.0 <= conf <= 1.0:
+                    confidence = conf
+            except (ValueError, TypeError):
+                pass
 
     diag: Diagnosis = {
         "root_cause": root_cause,
