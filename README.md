@@ -204,9 +204,8 @@ facilitymind/
 - [x] Phase 1: MVP 可运行（Intake → Diagnose → Dispatch + CLI + 离线模式）
 - [x] Phase 2: Human-in-the-Loop 审批节点、QA Agent、Report Agent（共 6 个 Agent 闭环）
 - [x] Phase 3: 评估 harness（任务完成率 / QA 通过率 / SLA 达成率 / 成本 / token · 一键 Markdown+JSON 报告）
-- [x] Phase 3: GitHub 仓库已发布（digitsouler/facility-multiagents）
-- [ ] Phase 3 (待续): Web Dashboard（实时 Agent 状态流可视化）
-- [ ] Phase 4: MCP 工具接入（CMMS / IoT / ERP / IM）、多场景扩展（能耗优化、预防性保养）、社区运营
+- [ ] Phase 4 (待续): Web Dashboard（实时 Agent 状态流可视化）
+- [ ] Phase 5: MCP 工具接入（CMMS / IoT / ERP / IM）、多场景扩展（能耗优化、预防性保养）、社区运营
 
 ## License
 
