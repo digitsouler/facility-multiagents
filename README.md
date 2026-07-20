@@ -136,6 +136,10 @@ python -m facilitymind.eval --all --quiet
 > 离线规则模式下 Token 恒为 0（未调用大模型），报告会标注运行模式，保证指标诚实可读。
 > 接入真实大模型后，Token 字段即真实用量，可直接用于"规则 vs LLM"的成本/质量权衡分析。
 
+在线 LLM 模式（DeepSeek）示例输出：
+
+![在线 LLM 评估报告示例](docs/images/eval-report-t001.png)
+
 示例报告（`eval_report.md`）：
 
 ```
@@ -185,7 +189,9 @@ facilitymind/
 │   ├── graph.py        # LangGraph 状态机编排
 │   ├── cli.py          # 命令行入口
 │   ├── eval.py         # 评估 harness（批量指标 + 报告）
+│   ├── compare.py      # 规则库 vs LLM 对比工具
 │   └── data/tickets.json
+├── docs/images/        # 截图与文档图片
 ├── requirements.txt
 ├── docker-compose.yml
 └── README.md
