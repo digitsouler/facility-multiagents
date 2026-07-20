@@ -5,6 +5,7 @@
   python -m facilitymind.cli --all             # 跑全部示例工单（自动批准）
   python -m facilitymind.cli --scenario elevator_fault   # 跑预设场景
   python -m facilitymind.cli --id T-001 --auto # 跳过人工确认
+  python -m facilitymind.cli --id T-001 --compare # 对比规则库 vs DeepSeek 结论差异
 
 无 LLM Key 时自动走规则模式，开箱即跑。
 
@@ -81,37 +82,39 @@ def main() -> None:
     parser.add_argument("--all", action="store_true", help="运行全部示例工单")
     parser.add_argument("--scenario", help="预设场景名 elevator_fault / hvac_fault / leak")
     parser.add_argument("--auto", action="store_true", help="跳过人工确认（自动批准）")
+    parser.add_argument("--compare", action="store_true", help="对比规则库与 LLM 的结论差异（不跑完整流水线）")
     args = parser.parse_args()
 
     tickets = load_tickets()
 
+    # 解析目标工单列表（id / scenario / all / 默认首条）
     if args.id:
-        target = next((t for t in tickets if t["id"] == args.id), None)
-        if not target:
-            print(f"未找到工单 {args.id}")
-            return
-        config = {"configurable": {"thread_id": args.id}}
-        _print_result(args.id, run_one(target, config, auto_approve=args.auto))
-
+        targets = [t for t in tickets if t["id"] == args.id]
     elif args.scenario:
         scenario_map = {"elevator_fault": "T-001", "hvac_fault": "T-003", "leak": "T-005"}
         tid = scenario_map.get(args.scenario)
-        target = next((t for t in tickets if t["id"] == tid), None)
-        if not target:
-            print(f"未找到场景 {args.scenario}")
-            return
-        config = {"configurable": {"thread_id": tid}}
-        _print_result(tid, run_one(target, config, auto_approve=args.auto))
-
+        targets = [t for t in tickets if t["id"] == tid]
     elif args.all:
-        for t in tickets:
-            config = {"configurable": {"thread_id": t["id"]}}
-            _print_result(t["id"], run_one(t, config, auto_approve=True))
-
+        targets = list(tickets)
     else:
-        target = tickets[0]
-        config = {"configurable": {"thread_id": target["id"]}}
-        _print_result(target["id"], run_one(target, config, auto_approve=args.auto))
+        targets = [tickets[0]]
+
+    if not targets:
+        print("未找到目标工单（检查 --id / --scenario 参数）")
+        return
+
+    # 对比模式：只展示规则库 vs LLM 的结论差异
+    if args.compare:
+        from .compare import compare_ticket
+        for t in targets:
+            print(compare_ticket(t))
+            print()
+        return
+
+    # 正常流水线模式
+    for t in targets:
+        config = {"configurable": {"thread_id": t["id"]}}
+        _print_result(t["id"], run_one(t, config, auto_approve=args.auto or args.all))
 
 
 if __name__ == "__main__":

@@ -30,6 +30,7 @@
 | 🔌 LLM 可插拔 | 有 Key 走大模型，无 Key 走规则库，二者无缝切换 |
 | 📚 内置知识库 | 8 类常见设施故障的处理经验 + 每类 QA 检查清单，离线可用 |
 | 🔁 历史感知 | 识别同一位置重复故障并自动升级处置 |
+| 🆚 规则 vs LLM 对比 | `--compare` 并排展示规则库与 DeepSeek 的结论差异，验证模型是否真起作用 |
 | 📊 结构化输出 | 每条工单产出根因、处置、成本、SLA、派单、质检、报告全链路 |
 
 ## Quick Start
@@ -65,6 +66,9 @@ cp .env.example .env
 
 不设则自动进入离线规则模式。
 
+> 已内置 `python-dotenv`：`.env` 会在程序启动时自动读取，无需手动 `export`。
+> 只要 `LLM_API_KEY` 非空，CLI / eval 即自动切入在线 LLM 模式，且任意 API 错误都会安全回退规则库。
+
 ## Usage
 
 ```bash
@@ -80,6 +84,9 @@ python -m facilitymind.cli --scenario leak
 
 # 全部示例（自动批准）
 python -m facilitymind.cli --all
+
+# 对比「规则库」与「DeepSeek(LLM)」对同一工单的结论差异（验证模型是否真起作用）
+python -m facilitymind.cli --id T-001 --compare
 ```
 
 示例输出（电梯困人，触发人工确认节点）：
@@ -189,7 +196,8 @@ facilitymind/
 - [x] Phase 1: MVP 可运行（Intake → Diagnose → Dispatch + CLI + 离线模式）
 - [x] Phase 2: Human-in-the-Loop 审批节点、QA Agent、Report Agent（共 6 个 Agent 闭环）
 - [x] Phase 3: 评估 harness（任务完成率 / QA 通过率 / SLA 达成率 / 成本 / token · 一键 Markdown+JSON 报告）
-- [ ] Phase 3 (待续): Web Dashboard、GitHub 发布
+- [x] Phase 3: GitHub 仓库已发布（digitsouler/facility-multiagents）
+- [ ] Phase 3 (待续): Web Dashboard（实时 Agent 状态流可视化）
 - [ ] Phase 4: MCP 工具接入（CMMS / IoT / ERP / IM）、多场景扩展（能耗优化、预防性保养）、社区运营
 
 ## License
