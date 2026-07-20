@@ -1,0 +1,9 @@
+services:
+  facilitymind:
+    build: .
+    env_file:
+      - .env
+    environment:
+      - LLM_API_KEY=${LLM_API_KEY:-}
+    # 默认演示全部内置示例工单；也可改为 python -m facilitymind.cli --scenario elevator_fault
+    command: python -m facilitymind.cli --all

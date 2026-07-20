@@ -1,0 +1,142 @@
+[
+  {
+    "id": "T-001",
+    "raw": "A座3#梯又困人了，电梯门打不开，里面有人，赶紧派人来！",
+    "reporter": "业主王先生",
+    "type": "elevator",
+    "location_hint": "A座3#梯"
+  },
+  {
+    "id": "T-002",
+    "raw": "B栋客梯显示ERR，停运了，影响上下班",
+    "reporter": "物业前台",
+    "type": "elevator",
+    "location_hint": "B栋"
+  },
+  {
+    "id": "T-003",
+    "raw": "12楼办公室空调不制冷了，天气热受不了",
+    "reporter": "租户李女士",
+    "type": "hvac",
+    "location_hint": "12楼"
+  },
+  {
+    "id": "T-004",
+    "raw": "大堂新风有异味，可能是滤网脏了",
+    "reporter": "保洁主管",
+    "type": "hvac",
+    "location_hint": "大堂"
+  },
+  {
+    "id": "T-005",
+    "raw": "地下车库管道爆管漏水，地面积水严重",
+    "reporter": "巡检员",
+    "type": "leak",
+    "location_hint": "地下车库"
+  },
+  {
+    "id": "T-006",
+    "raw": "厨房水龙头一直渗水，柜子都泡了",
+    "reporter": "业主陈先生",
+    "type": "leak",
+    "location_hint": "厨房"
+  },
+  {
+    "id": "T-007",
+    "raw": "走廊灯全灭了，应该是跳闸，晚上看不清路",
+    "reporter": "业主",
+    "type": "lighting",
+    "location_hint": "走廊"
+  },
+  {
+    "id": "T-008",
+    "raw": "单元门口灯坏了，建议更换",
+    "reporter": "管家",
+    "type": "lighting",
+    "location_hint": "单元门口"
+  },
+  {
+    "id": "T-009",
+    "raw": "三楼烟感一直报警，可能是电池没电误报",
+    "reporter": "消控室",
+    "type": "fire",
+    "location_hint": "三楼"
+  },
+  {
+    "id": "T-010",
+    "raw": "消防通道灭火器压力不足，需要检查",
+    "reporter": "安全员",
+    "type": "fire",
+    "location_hint": "消防通道"
+  },
+  {
+    "id": "T-011",
+    "raw": "地库道闸抬不起来，车出不去",
+    "reporter": "车主",
+    "type": "access",
+    "location_hint": "地库道闸"
+  },
+  {
+    "id": "T-012",
+    "raw": "单元门禁刷卡没反应，业主进不来",
+    "reporter": "业主",
+    "type": "access",
+    "location_hint": "单元门"
+  },
+  {
+    "id": "T-013",
+    "raw": "垃圾房味道很大，保洁好像漏了",
+    "reporter": "业主",
+    "type": "cleaning",
+    "location_hint": "垃圾房"
+  },
+  {
+    "id": "T-014",
+    "raw": "电梯轿厢有点脏，建议清洁一下",
+    "reporter": "管家",
+    "type": "cleaning",
+    "location_hint": "电梯轿厢"
+  },
+  {
+    "id": "T-015",
+    "raw": "小区草坪枯黄了，疑似灌溉不足",
+    "reporter": "绿化养护",
+    "type": "greening",
+    "location_hint": "小区草坪"
+  },
+  {
+    "id": "T-016",
+    "raw": "A座3#梯昨天也停过一次，今天又困人，老问题了",
+    "reporter": "业主王先生",
+    "type": "elevator",
+    "location_hint": "A座3#梯"
+  },
+  {
+    "id": "T-017",
+    "raw": "B栋消防管轻微渗水，墙面发霉",
+    "reporter": "管家",
+    "type": "leak",
+    "location_hint": "B栋"
+  },
+  {
+    "id": "T-018",
+    "raw": "会议室空调制冷慢，开会热",
+    "reporter": "行政",
+    "type": "hvac",
+    "location_hint": "会议室"
+  },
+  {
+    "id": "T-019",
+    "raw": "地库灯光闪烁，可能是接触不良",
+    "reporter": "巡检员",
+    "type": "lighting",
+    "location_hint": "地库"
+  },
+  {
+    "id": "T-020",
+    "raw": "园区树木有病虫害，叶子都卷了",
+    "reporter": "绿化养护",
+    "type": "greening",
+    "location_hint": "园区"
+  }
+]
