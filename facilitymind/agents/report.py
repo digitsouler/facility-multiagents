@@ -50,5 +50,36 @@ def report_agent(state: FacilityState) -> dict:
             "recurrence": diag.get("recurrence", False),
         },
     }
+
+    # 记忆回写（Phase 6.1）：把本次处置沉淀为可复用的事件记忆与资产知识。
+    # 数据库不可用时 get_store() 自动降级为 no-op，不拖垮流水线。
+    try:
+        from ..memory import get_store
+        from ..mcp.providers import _resolve_asset
+
+        store = get_store()
+        asset_id = _resolve_asset(ticket) or ""
+        building = ticket.get("location_hint") or "N/A"
+        evidence = "\n".join(diag.get("evidence") or [])
+        store.add_incident(
+            ticket_id=ticket["id"], ticket_type=ticket["type"], building=building,
+            asset_id=asset_id, asset_type=ticket["type"], urgency=ticket["urgency"],
+            root_cause=diag["root_cause"], recommended_action=diag["recommended_action"],
+            required_skill=diag["required_skill"], vendor=plan["vendor"], cost=plan["cost"],
+            estimated_cost=diag["estimated_cost"],
+            actual_response_min=execution.get("actual_response_min", 0),
+            sla_hours=diag["sla_hours"], confidence=diag["confidence"],
+            recurrence=diag.get("recurrence", False), evidence=evidence,
+            outcome_valid=qa_passed,
+        )
+        store.add_asset_knowledge(
+            asset_id=asset_id, building=building, asset_type=ticket["type"],
+            vendor=plan["vendor"], cost=plan["cost"],
+            actual_response_min=execution.get("actual_response_min", 0),
+        )
+    except Exception:
+        # 记忆写入失败不应影响主流程
+        pass
+
     log = f"[Report] {summary}"
     return {"report": report, "messages": [{"role": "system", "content": log}]}

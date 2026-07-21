@@ -6,6 +6,7 @@
 
 from ..dataio import load_vendors
 from ..llm import get_agent_client
+from ..memory.retrieval import get_asset_context
 from ..state import DispatchPlan, FacilityState
 
 
@@ -22,7 +23,23 @@ def dispatch_agent(state: FacilityState) -> dict:
     candidates.sort(key=lambda v: (v["response_min"], v["cost"]))
     best = candidates[0]
 
-    rationale = f"按技能[{skill}]匹配，{best['name']}响应{best['response_min']}分钟最快且报价最低"
+    # 记忆增强（Phase 6.2）：若该资产历史档案指向某优选供应商，且满足技能匹配，则优先复用。
+    asset_ctx = get_asset_context(state["ticket"])
+    if asset_ctx:
+        pref = asset_ctx.get("preferred_vendor")
+        if pref and any(v["name"] == pref for v in candidates):
+            candidates.sort(
+                key=lambda v: (0 if v["name"] == pref else 1, v["response_min"], v["cost"])
+            )
+            best = candidates[0]
+            rationale = (
+                f"参考资产历史档案，优先复用优选供应商 {pref}"
+                f"（平均响应 {asset_ctx['avg_response_min']:.0f} 分钟、均成本 ¥{asset_ctx['avg_cost']:.0f}）"
+            )
+        else:
+            rationale = f"按技能[{skill}]匹配，{best['name']}响应{best['response_min']}分钟最快且报价最低"
+    else:
+        rationale = f"按技能[{skill}]匹配，{best['name']}响应{best['response_min']}分钟最快且报价最低"
 
     client = get_agent_client("dispatch")
     if client.available:

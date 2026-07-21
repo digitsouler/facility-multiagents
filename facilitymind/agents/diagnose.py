@@ -12,6 +12,7 @@ from ..dataio import load_tickets
 from ..knowledge import KB
 from ..llm import extract_json, get_agent_client, get_ensemble_clients
 from ..mcp import providers
+from ..memory.retrieval import retrieve_similar, get_asset_context, format_memory_context
 from ..state import Diagnosis, FacilityState, ToolCall
 
 
@@ -38,13 +39,13 @@ def _check_recurrence(ticket) -> bool:
     return len(earlier) >= 1
 
 
-def _single_diag(client, ticket: dict) -> dict | None:
-    """让单个模型给出诊断 JSON；解析失败返回 None。"""
+def _single_diag(client, ticket: dict, memory_ctx: str = "") -> dict | None:
+    """让单个模型给出诊断 JSON；解析失败返回 None。memory_ctx 为注入的历史经验文本。"""
     sys_prompt = (
         "你是设施管理诊断专家。根据故障类型与历史，推断根因与处置建议。"
         "只返回 JSON：{root_cause, recommended_action, confidence}。"
     )
-    out = client.complete(sys_prompt, ticket["raw"])
+    out = client.complete(sys_prompt, ticket["raw"] + memory_ctx)
     parsed = extract_json(out)
     if parsed and parsed.get("root_cause") and parsed.get("recommended_action"):
         try:
@@ -101,6 +102,12 @@ def diagnose_agent(state: FacilityState) -> dict:
     kb = KB.get(ticket["type"], KB["cleaning"])
     recurrence = _check_recurrence(ticket)
 
+    # 检索持久化记忆：相似历史事件 + 资产档案，注入 LLM 提示词。
+    # 记忆不可用时 retrieve_similar 返回空，照常走 KB，不中断流水线。
+    similar = retrieve_similar(ticket)
+    asset_ctx = get_asset_context(ticket)
+    memory_ctx_str = format_memory_context(similar, asset_ctx)
+
     # 先尝试拉取该工单对应资产的 IoT 实时遥测，作为证据化诊断的输入。
     # 任何失败（无对应传感器 / server 未起 / 超时）都回退 KB，不中断流水线。
     tool_calls: list[ToolCall] = []
@@ -130,7 +137,7 @@ def diagnose_agent(state: FacilityState) -> dict:
     if state.get("ensemble"):
         # Ensemble：扇出到多个可用模型，再用合成器整合
         avail = [c for c in get_ensemble_clients() if c.available]
-        candidates = [c for c in (_single_diag(c, ticket) for c in avail) if c]
+        candidates = [c for c in (_single_diag(c, ticket, memory_ctx_str) for c in avail) if c]
         if candidates:
             ensemble_used = True
             if len(candidates) >= 2:
@@ -147,7 +154,7 @@ def diagnose_agent(state: FacilityState) -> dict:
         # 单模型：使用本 Agent 绑定的模型（默认 deepseek）
         client = get_agent_client("diagnose")
         if client.available:
-            parsed = _single_diag(client, ticket)
+            parsed = _single_diag(client, ticket, memory_ctx_str)
             if parsed:
                 root_cause = parsed["root_cause"]
                 recommended_action = parsed["recommended_action"]
@@ -159,6 +166,18 @@ def diagnose_agent(state: FacilityState) -> dict:
         ev = _summarize_telemetry(telemetry)
         evidence.append(f"IoT({telemetry.get('asset_id')})：{ev}")
         root_cause = f"{root_cause}（IoT佐证：{ev}）"
+
+    # 用持久化记忆佐证根因：同类型既往处置作为经验参考。
+    if similar:
+        top = similar[0]
+        evidence.append(
+            f"历史经验：同类型既往 {len(similar)} 条，典型根因「{top['root_cause']}」（{top['building']}）"
+        )
+        root_cause = (
+            f"{root_cause}（历史佐证：同类型既往 {len(similar)} 次，"
+            f"典型根因「{top['root_cause']}」）"
+        )
+        confidence = min(0.98, confidence + 0.03)  # 记忆增强：置信度小幅上浮
 
     diag: Diagnosis = {
         "root_cause": root_cause,
@@ -176,8 +195,9 @@ def diagnose_agent(state: FacilityState) -> dict:
     else:
         ens_tag = ""
     mcp_note = f" + IoT遥测({telemetry['asset_id']})" if telemetry else ""
+    mem_note = f" + 记忆({len(similar)})" if similar else ""
     log = (
-        f"[Diagnose{ens_tag}{mcp_note}] 类型={ticket['type']} → 根因={root_cause}；"
+        f"[Diagnose{ens_tag}{mcp_note}{mem_note}] 类型={ticket['type']} → 根因={root_cause}；"
         f"建议={recommended_action}；预估¥{kb['estimated_cost']:.0f}；"
         f"SLA {kb['sla_hours']}h；置信度={confidence:.2f}{extra}"
     )
