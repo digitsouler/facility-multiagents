@@ -34,5 +34,5 @@ def resolve_command(spec: dict):
 
     module = spec.get("module")  # e.g. facilitymind.mcp.servers.iot
     rel = module.replace(".", os.sep) + ".py"
-    file_path = os.path.join(PKG_DIR, rel)
+    file_path = os.path.join(ROOT_DIR, rel)
     return sys.executable, [file_path]

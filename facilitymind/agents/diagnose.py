@@ -6,11 +6,13 @@
 """
 
 import json
+from datetime import datetime
 
 from ..dataio import load_tickets
 from ..knowledge import KB
 from ..llm import extract_json, get_agent_client, get_ensemble_clients
-from ..state import Diagnosis, FacilityState
+from ..mcp import providers
+from ..state import Diagnosis, FacilityState, ToolCall
 
 
 def _check_recurrence(ticket) -> bool:
@@ -81,10 +83,44 @@ def _synthesize(synth_client, candidates: list) -> dict | None:
     return None
 
 
+def _summarize_telemetry(telemetry: dict) -> str:
+    """把遥测 dict 转成一句可用于佐证根因的文本（只列异常指标）。"""
+    name = telemetry.get("name", telemetry.get("asset_id", "资产"))
+    metrics = telemetry.get("metrics", {})
+    bad = []
+    for m, v in metrics.items():
+        if isinstance(v, dict) and v.get("status") == "anomaly":
+            bad.append(f"{m}={v.get('value')}{v.get('unit', '')}(基线{v.get('baseline')})")
+    if not bad:
+        return f"{name} 各指标正常"
+    return f"{name}：" + "、".join(bad)
+
+
 def diagnose_agent(state: FacilityState) -> dict:
     ticket = state["ticket"]
     kb = KB.get(ticket["type"], KB["cleaning"])
     recurrence = _check_recurrence(ticket)
+
+    # 先尝试拉取该工单对应资产的 IoT 实时遥测，作为证据化诊断的输入。
+    # 任何失败（无对应传感器 / server 未起 / 超时）都回退 KB，不中断流水线。
+    tool_calls: list[ToolCall] = []
+    telemetry = None
+    asset_id = providers._resolve_asset(ticket)
+    if asset_id:
+        try:
+            res = providers.read_sensor_for_ticket(ticket)
+            if res:
+                telemetry = res
+                tool_calls.append({
+                    "agent": "diagnose",
+                    "server": "iot",
+                    "tool": "read_sensor",
+                    "args": {"asset_id": asset_id, "metric": "all"},
+                    "result": res,
+                    "ts": datetime.now().isoformat(timespec="seconds"),
+                })
+        except Exception:  # noqa: BLE001
+            telemetry = None
 
     root_cause = kb["root_cause"]
     recommended_action = kb["recommended_action"]
@@ -117,6 +153,13 @@ def diagnose_agent(state: FacilityState) -> dict:
                 recommended_action = parsed["recommended_action"]
                 confidence = parsed["confidence"]
 
+    evidence: list[str] = []
+    if telemetry:
+        # 用真实传感器数据佐证根因，提升诊断可信度（"证据化诊断"）
+        ev = _summarize_telemetry(telemetry)
+        evidence.append(f"IoT({telemetry.get('asset_id')})：{ev}")
+        root_cause = f"{root_cause}（IoT佐证：{ev}）"
+
     diag: Diagnosis = {
         "root_cause": root_cause,
         "recommended_action": recommended_action,
@@ -125,15 +168,21 @@ def diagnose_agent(state: FacilityState) -> dict:
         "sla_hours": kb["sla_hours"],
         "confidence": confidence,
         "recurrence": recurrence,
+        "evidence": evidence,
     }
     extra = "（近期重复发生，已升级处置）" if recurrence else ""
     if ensemble_used:
         ens_tag = " [Ensemble]" if len([c for c in get_ensemble_clients() if c.available]) >= 2 else " [Ensemble·单模型]"
     else:
         ens_tag = ""
+    mcp_note = f" + IoT遥测({telemetry['asset_id']})" if telemetry else ""
     log = (
-        f"[Diagnose{ens_tag}] 类型={ticket['type']} → 根因={root_cause}；"
+        f"[Diagnose{ens_tag}{mcp_note}] 类型={ticket['type']} → 根因={root_cause}；"
         f"建议={recommended_action}；预估¥{kb['estimated_cost']:.0f}；"
         f"SLA {kb['sla_hours']}h；置信度={confidence:.2f}{extra}"
     )
-    return {"diagnosis": diag, "messages": [{"role": "system", "content": log}]}
+    return {
+        "diagnosis": diag,
+        "tool_calls": tool_calls,
+        "messages": [{"role": "system", "content": log}],
+    }

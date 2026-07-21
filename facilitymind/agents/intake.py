@@ -50,6 +50,7 @@ def intake_agent(state: FacilityState) -> dict:
         "type": ttype,
         "urgency": urgency,
         "location": location,
+        "location_hint": state["ticket"].get("location_hint", ""),
         "reporter": reporter,
         "created_at": datetime.now().isoformat(timespec="seconds"),
     }

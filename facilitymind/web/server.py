@@ -119,6 +119,17 @@ def api_models():
     return {"models": list_models()}
 
 
+@api.get("/api/mcp")
+def api_mcp():
+    """返回 MCP server 接入状态（供 Dashboard 展示 IoT / CMMS 等在线情况）。"""
+    from ..mcp import get_hub
+    try:
+        servers = get_hub().servers()
+    except Exception as e:  # noqa: BLE001
+        servers = {"_error": {"available": False, "error": str(e)}}
+    return {"servers": servers}
+
+
 class ApprovalDecision(BaseModel):
     ticket_id: str
     approved: bool

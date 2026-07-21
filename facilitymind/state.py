@@ -5,6 +5,7 @@
 """
 
 from typing import Annotated, Optional, TypedDict
+import operator
 from langgraph.graph import add_messages
 
 
@@ -15,6 +16,7 @@ class Ticket(TypedDict):
     type: str                # 故障类型：elevator / hvac / leak / lighting / fire / access / cleaning / greening
     urgency: str             # high / medium / low
     location: str            # 位置描述，如 "A座3#梯"
+    location_hint: str       # 原始结构化位置提示（用于映射到受监控资产/MCP）
     reporter: str            # 报修人
     created_at: str          # 创建时间
 
@@ -28,6 +30,7 @@ class Diagnosis(TypedDict):
     sla_hours: int           # 服务级别时限（小时）
     confidence: float        # 置信度 0-1
     recurrence: bool         # 是否近期重复发生
+    evidence: list[str]      # 来自 MCP 工具的真实数据佐证（无则空）
 
 
 class DispatchPlan(TypedDict):
@@ -70,6 +73,17 @@ class Report(TypedDict):
     metrics: dict
 
 
+class ToolCall(TypedDict, total=False):
+    """一次 MCP 工具调用轨迹（供 Dashboard「工具调用时间线」展示）。"""
+    agent: str               # 发起调用的 Agent
+    server: str              # MCP server 名
+    tool: str                # 工具名
+    args: dict               # 入参
+    result: object           # 返回（截断展示用）
+    error: str               # 若有错误
+    ts: str                  # 时间戳
+
+
 class FacilityState(TypedDict, total=False):
     """整条工作流的状态。total=False 允许节点只返回自己关心的字段。"""
     ticket: Ticket
@@ -81,4 +95,5 @@ class FacilityState(TypedDict, total=False):
     report: Report
     auto_approve: bool       # 批量/非交互模式下跳过人工确认
     ensemble: bool           # 诊断阶段是否启用多模型集成（Ensemble）
+    tool_calls: Annotated[list, operator.add]  # 全链路 MCP 工具调用轨迹
     messages: Annotated[list, add_messages]  # 全程可追溯的 Agent 对话日志

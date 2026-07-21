@@ -57,6 +57,10 @@ def run_one(raw_ticket: dict, ensemble: bool = False) -> dict:
     sla_met = completed and execution.get("actual_response_min", 0) <= sla_min
     cost = plan.get("cost", 0.0)
 
+    # 采集 MCP 工具调用轨迹（用于量化"Agent 真调工具"的程度）
+    mcp_calls = result.get("tool_calls", []) or []
+    mcp_call_servers = [tc.get("server") for tc in mcp_calls if tc.get("server")]
+
     return {
         "id": raw_ticket["id"],
         "type": result.get("ticket", {}).get("type", raw_ticket.get("type")),
@@ -75,6 +79,8 @@ def run_one(raw_ticket: dict, ensemble: bool = False) -> dict:
         "llm_calls": total_calls_all(),
         "steps": _count_steps(result.get("messages", [])),
         "recurrence": diag.get("recurrence", False),
+        "mcp_calls": len(mcp_calls),
+        "mcp_call_servers": mcp_call_servers,
     }
 
 
@@ -86,6 +92,11 @@ def aggregate(records: list[dict]) -> dict:
     for r in records:
         for m, tok in (r.get("model_tokens") or {}).items():
             model_usage[m] = model_usage.get(m, 0) + tok
+    # 按 MCP server 聚合工具调用次数
+    mcp_usage: dict[str, int] = {}
+    for r in records:
+        for s in (r.get("mcp_call_servers") or []):
+            mcp_usage[s] = mcp_usage.get(s, 0) + 1
     return {
         "total": len(records),
         "mode": "在线 LLM" if llm.available else "离线规则",
@@ -99,6 +110,8 @@ def aggregate(records: list[dict]) -> dict:
         "total_tokens": sum(r["tokens"] for r in records),
         "model_usage": model_usage,
         "total_llm_calls": sum(r["llm_calls"] for r in records),
+        "total_mcp_calls": sum(r["mcp_calls"] for r in records),
+        "mcp_usage": mcp_usage,
         "avg_steps": sum(r["steps"] for r in records) / n,
     }
 
@@ -117,6 +130,7 @@ def render_report(records: list[dict], metrics: dict) -> str:
         f"- 总处置成本：¥{metrics['total_cost']:.0f}（均值 ¥{metrics['avg_cost']:.0f}）",
         f"- Token 消耗：{metrics['total_tokens']}（LLM 调用 {metrics['total_llm_calls']} 次）",
         f"- 各模型 Token：{metrics['model_usage'] or '无'}",
+        f"- MCP 工具调用：{metrics['total_mcp_calls']} 次（{metrics['mcp_usage'] or '无'}）",
         f"- 平均步骤数：{metrics['avg_steps']:.1f}",
         "",
         "## 逐工单明细",
