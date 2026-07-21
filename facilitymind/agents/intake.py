@@ -8,7 +8,7 @@ import re
 from datetime import datetime
 
 from ..knowledge import KB, classify_type, classify_urgency
-from ..llm import extract_json, llm
+from ..llm import extract_json, get_agent_client
 from ..state import FacilityState, Ticket
 
 
@@ -25,13 +25,14 @@ def intake_agent(state: FacilityState) -> dict:
     # 规则值作为默认，LLM 仅在解析有效时覆盖，保证任何情况下都有合法结论
     ttype = classify_type(raw)
     urgency = classify_urgency(raw)
-    if llm.available:
+    client = get_agent_client("intake")
+    if client.available:
         sys_prompt = (
             "你是物业工单受理助手。从报修文本中抽取：故障类型(电梯/空调/漏水/照明/"
             "消防/门禁/保洁/绿化)、紧急程度(high/medium/low)。只返回 JSON："
             '{"type": "...", "urgency": "..."}。'
         )
-        out = llm.complete(sys_prompt, raw)
+        out = client.complete(sys_prompt, raw)
         parsed = extract_json(out)
         if parsed:
             cand_type = str(parsed.get("type", "")).strip().lower()

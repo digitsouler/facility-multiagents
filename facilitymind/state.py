@@ -80,4 +80,5 @@ class FacilityState(TypedDict, total=False):
     qa: QAResult
     report: Report
     auto_approve: bool       # 批量/非交互模式下跳过人工确认
+    ensemble: bool           # 诊断阶段是否启用多模型集成（Ensemble）
     messages: Annotated[list, add_messages]  # 全程可追溯的 Agent 对话日志

@@ -16,7 +16,7 @@ import json
 from .dataio import load_tickets
 from .graph import app
 from .knowledge import APPROVAL_THRESHOLD_COST
-from .llm import llm
+from .llm import llm, reset_all, total_tokens_all, total_calls_all, usage_breakdown
 
 
 def _content_of(msg) -> str:
@@ -38,10 +38,10 @@ def _count_steps(messages) -> int:
     return len(tags)
 
 
-def run_one(raw_ticket: dict) -> dict:
+def run_one(raw_ticket: dict, ensemble: bool = False) -> dict:
     """跑单条工单并抽取评估指标。"""
-    llm.reset()
-    initial = {"ticket": raw_ticket, "auto_approve": True}
+    reset_all()  # 清零所有已缓存模型的计量，实现按工单拆分
+    initial = {"ticket": raw_ticket, "auto_approve": True, "ensemble": ensemble}
     # 用 eval- 前缀 thread_id，避免与 Dashboard 看板的流式 thread_id 互相污染 MemorySaver 状态
     result = app.invoke(initial, {"configurable": {"thread_id": "eval-" + raw_ticket["id"]}})
 
@@ -70,8 +70,9 @@ def run_one(raw_ticket: dict) -> dict:
         "qa_score": qa.get("score", 0.0),
         "sla_met": sla_met,
         "actual_response_min": execution.get("actual_response_min", 0),
-        "tokens": llm.total_tokens,
-        "llm_calls": llm.call_count,
+        "tokens": total_tokens_all(),
+        "model_tokens": usage_breakdown(),
+        "llm_calls": total_calls_all(),
         "steps": _count_steps(result.get("messages", [])),
         "recurrence": diag.get("recurrence", False),
     }
@@ -80,6 +81,11 @@ def run_one(raw_ticket: dict) -> dict:
 def aggregate(records: list[dict]) -> dict:
     n = len(records) or 1
     total_cost = sum(r["cost"] for r in records)
+    # 按模型聚合 token 消耗
+    model_usage: dict[str, int] = {}
+    for r in records:
+        for m, tok in (r.get("model_tokens") or {}).items():
+            model_usage[m] = model_usage.get(m, 0) + tok
     return {
         "total": len(records),
         "mode": "在线 LLM" if llm.available else "离线规则",
@@ -91,6 +97,7 @@ def aggregate(records: list[dict]) -> dict:
         "total_cost": total_cost,
         "avg_cost": total_cost / n,
         "total_tokens": sum(r["tokens"] for r in records),
+        "model_usage": model_usage,
         "total_llm_calls": sum(r["llm_calls"] for r in records),
         "avg_steps": sum(r["steps"] for r in records) / n,
     }
@@ -109,6 +116,7 @@ def render_report(records: list[dict], metrics: dict) -> str:
         f"- 人工确认通过率：{metrics['approval_rate'] * 100:.1f}%",
         f"- 总处置成本：¥{metrics['total_cost']:.0f}（均值 ¥{metrics['avg_cost']:.0f}）",
         f"- Token 消耗：{metrics['total_tokens']}（LLM 调用 {metrics['total_llm_calls']} 次）",
+        f"- 各模型 Token：{metrics['model_usage'] or '无'}",
         f"- 平均步骤数：{metrics['avg_steps']:.1f}",
         "",
         "## 逐工单明细",

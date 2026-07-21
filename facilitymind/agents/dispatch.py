@@ -5,7 +5,7 @@
 """
 
 from ..dataio import load_vendors
-from ..llm import llm
+from ..llm import get_agent_client
 from ..state import DispatchPlan, FacilityState
 
 
@@ -24,12 +24,13 @@ def dispatch_agent(state: FacilityState) -> dict:
 
     rationale = f"按技能[{skill}]匹配，{best['name']}响应{best['response_min']}分钟最快且报价最低"
 
-    if llm.available:
+    client = get_agent_client("dispatch")
+    if client.available:
         sys_prompt = (
             "你是物业调度助手。给定诊断所需的技能与候选资源池，给出最优派单。"
             "只返回 JSON：{vendor, response_time_min, cost, rationale}。"
         )
-        llm.complete(sys_prompt, f"skill={skill}, vendors={candidates}")
+        client.complete(sys_prompt, f"skill={skill}, vendors={candidates}")
 
     plan: DispatchPlan = {
         "vendor": best["name"],

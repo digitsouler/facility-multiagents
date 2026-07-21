@@ -65,6 +65,10 @@
           <input id="auto-toggle" type="checkbox" checked class="w-4 h-4 accent-indigo-600" />
           自动批准（关闭后高成本派单将在网页内等待人工确认 · M3）
         </label>
+        <label class="mt-1 flex items-center gap-2 text-xs text-slate-600 cursor-pointer select-none">
+          <input id="ensemble-toggle" type="checkbox" class="w-4 h-4 accent-indigo-600" />
+          多模型集成 Ensemble（诊断扇出多个模型并合成 · 需配置 ≥2 个模型 Key）
+        </label>
       </div>
 
       <!-- 流水线 stepper -->
@@ -222,6 +226,7 @@
     function run() {
       if (!selected || es) return;
       const auto = $("auto-toggle").checked ? 1 : 0;
+      const ensemble = $("ensemble-toggle").checked ? 1 : 0;
       $("run-btn").disabled = true;
       $("run-btn").textContent = "运行中…";
       $("pipeline").classList.remove("hidden");
@@ -233,7 +238,7 @@
       states[ORDER[0]] = "running";
       renderSteps(states);
 
-      es = new EventSource(`/api/stream?id=${encodeURIComponent(selected.id)}&auto=${auto}&pace=0.5`);
+      es = new EventSource(`/api/stream?id=${encodeURIComponent(selected.id)}&auto=${auto}&ensemble=${ensemble}&pace=0.5`);
 
       es.addEventListener("start", () => { ORDER.forEach(n => states[n] = "pending"); states[ORDER[0]] = "running"; renderSteps(states); });
 

@@ -139,10 +139,10 @@ def api_eval():
     return {"metrics": metrics, "records": records}
 
 
-def _run_stream(ticket: dict, auto_approve: bool, pace: float) -> Iterator[str]:
+def _run_stream(ticket: dict, auto_approve: bool, pace: float, ensemble: bool = False) -> Iterator[str]:
     """逐节点运行流水线并以 SSE 事件产出；auto_approve=False 时支持 M3 网页人工确认。"""
     config = {"configurable": {"thread_id": ticket["id"]}}
-    initial = {"ticket": ticket, "auto_approve": auto_approve}
+    initial = {"ticket": ticket, "auto_approve": auto_approve, "ensemble": ensemble}
 
     yield _sse("start", {"ticket_id": ticket["id"], "order": NODE_ORDER})
 
@@ -192,18 +192,19 @@ def _run_stream(ticket: dict, auto_approve: bool, pace: float) -> Iterator[str]:
 
 
 @api.get("/api/stream")
-def api_stream(id: str, auto: int = 1, pace: float = 0.5):
+def api_stream(id: str, auto: int = 1, pace: float = 0.5, ensemble: int = 0):
     """SSE 端点：实时推送某工单的流水线执行过程。
 
     auto=1（默认）：成本超阈值也自动放行，跑通完整流水线（M1/M2 行为）。
     auto=0：成本超阈值时触发 interrupt，需网页端 /api/approve 决策后继续（M3 行为）。
+    ensemble=1：诊断阶段启用多模型集成（Ensemble）。
     """
     tickets = _tickets_index()
     if id not in tickets:
         return JSONResponse({"error": f"未找到工单 {id}"}, status_code=404)
     headers = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
     return StreamingResponse(
-        _run_stream(tickets[id], bool(auto), max(0.0, pace)),
+        _run_stream(tickets[id], bool(auto), max(0.0, pace), bool(ensemble)),
         media_type="text/event-stream",
         headers=headers,
     )
