@@ -24,6 +24,7 @@ from pydantic import BaseModel
 from ..dataio import load_tickets
 from ..eval import aggregate, run_one
 from ..graph import app as engine
+from ..llm import calls_breakdown, list_models, usage_breakdown
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 
@@ -51,6 +52,8 @@ TYPE_CN = {
 
 # 进程内内存存储：thread_id -> 最终归并状态（去掉 messages）
 RUNS: dict[str, dict] = {}
+# thread_id -> 本单的 token 计量（按模型拆分），与 RUNS 配套展示
+RUN_META: dict[str, dict] = {}
 
 # M3 网页人工确认所需的等待队列：ticket_id -> threading.Event
 PENDING: dict[str, threading.Event] = {}
@@ -102,10 +105,18 @@ def api_tickets():
 
 @api.get("/api/result/{ticket_id}")
 def api_result(ticket_id: str):
-    """返回内存中某工单最近一次运行的完整结果。"""
+    """返回内存中某工单最近一次运行的完整结果（含按模型的 token 计量）。"""
     if ticket_id not in RUNS:
         return JSONResponse({"error": "尚无运行结果"}, status_code=404)
-    return RUNS[ticket_id]
+    data = dict(RUNS[ticket_id])
+    data.update(RUN_META.get(ticket_id, {}))  # 合并 tokens / model_tokens / llm_calls
+    return data
+
+
+@api.get("/api/models")
+def api_models():
+    """返回已声明模型清单（name / label / available），供前端展示友好名称。"""
+    return {"models": list_models()}
 
 
 class ApprovalDecision(BaseModel):
@@ -143,6 +154,11 @@ def _run_stream(ticket: dict, auto_approve: bool, pace: float, ensemble: bool = 
     """逐节点运行流水线并以 SSE 事件产出；auto_approve=False 时支持 M3 网页人工确认。"""
     config = {"configurable": {"thread_id": ticket["id"]}}
     initial = {"ticket": ticket, "auto_approve": auto_approve, "ensemble": ensemble}
+
+    # 跑之前快照各模型累计用量；结束后做差得到"本单"消耗（注册表为进程级全局累加）。
+    # 并发跑多条流水线时差值可能互串，Demo 场景为单流顺序执行，足够准确。
+    _before_tok = usage_breakdown()
+    _before_call = calls_breakdown()
 
     yield _sse("start", {"ticket_id": ticket["id"], "order": NODE_ORDER})
 
@@ -186,7 +202,31 @@ def _run_stream(ticket: dict, auto_approve: bool, pace: float, ensemble: bool = 
         # 取最终归并状态存内存，供看板复看
         final_state = _clean(engine.get_state(config).values)
         RUNS[ticket["id"]] = final_state
-        yield _sse("done", {"ticket_id": ticket["id"], "result": final_state})
+
+        # 计算本单各模型 token / 调用消耗（做差）
+        _after_tok = usage_breakdown()
+        _after_call = calls_breakdown()
+        models = sorted(set(_before_tok) | set(_after_tok))
+        model_tokens = {m: max(0, _after_tok.get(m, 0) - _before_tok.get(m, 0)) for m in models}
+        model_calls = {m: max(0, _after_call.get(m, 0) - _before_call.get(m, 0)) for m in models}
+        tokens = sum(model_tokens.values())
+        calls = sum(model_calls.values())
+        RUN_META[ticket["id"]] = {
+            "tokens": tokens,
+            "model_tokens": model_tokens,
+            "model_calls": model_calls,
+            "llm_calls": calls,
+        }
+        yield _sse(
+            "done",
+            {
+                "ticket_id": ticket["id"],
+                "result": final_state,
+                "tokens": tokens,
+                "model_tokens": model_tokens,
+                "llm_calls": calls,
+            },
+        )
     except Exception as exc:  # 兜底：任何异常都通过 SSE 反馈前端，避免连接静默中断
         yield _sse("error", {"message": f"{type(exc).__name__}: {exc}"})
 

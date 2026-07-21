@@ -106,6 +106,16 @@
         <div class="relative" style="height:240px"><canvas id="chart-cost"></canvas></div>
       </div>
     </div>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-5">
+      <div class="bg-white border border-slate-200 rounded-xl p-4">
+        <h3 class="text-sm font-semibold text-slate-700 mb-3">各模型 Token 消耗</h3>
+        <div class="relative" style="height:240px"><canvas id="chart-model-tokens"></canvas></div>
+      </div>
+      <div class="bg-white border border-slate-200 rounded-xl p-4">
+        <h3 class="text-sm font-semibold text-slate-700 mb-3">模型用量明细</h3>
+        <div id="model-tokens-legend" class="text-xs text-slate-600 space-y-1"></div>
+      </div>
+    </div>
     <div class="bg-white border border-slate-200 rounded-xl p-4">
       <h3 class="text-sm font-semibold text-slate-700 mb-3">逐工单明细</h3>
       <div id="eval-table" class="overflow-x-auto"></div>
@@ -116,11 +126,13 @@
     const ORDER = ["intake", "diagnose", "dispatch", "approval", "qa", "report"];
     const LABELS = { intake: "受理", diagnose: "诊断", dispatch: "派单", approval: "人工确认", qa: "质检", report: "报告" };
     let tickets = [], selected = null, es = null;
-    let evalData = null, ratesChart = null, costChart = null;
+    let evalData = null, ratesChart = null, costChart = null, modelTokenChart = null;
+    let MODEL_LABELS = {};
 
     const $ = (id) => document.getElementById(id);
     const esc = (s) => String(s ?? "").replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
     const pct = (x) => (x * 100).toFixed(1) + "%";
+    const mLabel = (name) => MODEL_LABELS[name] || name;
 
     /* ---------- 工单看板 ---------- */
     async function loadTickets() {
@@ -282,8 +294,8 @@
       });
 
       es.addEventListener("done", (ev) => {
-        const { result } = JSON.parse(ev.data);
-        renderResult(result);
+        const { result, tokens, model_tokens, llm_calls } = JSON.parse(ev.data);
+        renderResult(result, { tokens, model_tokens, llm_calls });
         closeES();
       });
 
@@ -304,10 +316,27 @@
       $("run-btn").textContent = "重新运行";
     }
 
-    function renderResult(r) {
+    function renderResult(r, meta) {
+      // meta 优先取实时推送的 token；从 /api/result 复看时 token 已并入 r
+      meta = meta || { tokens: r.tokens, model_tokens: r.model_tokens, llm_calls: r.llm_calls };
       const d = r.diagnosis || {}, p = r.dispatch_plan || {}, a = r.approval || {}, q = r.qa || {}, rp = r.report || {};
       const card = (title, body) => `<div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
         <div class="text-xs font-semibold text-slate-500 mb-1">${title}</div><div class="text-sm text-slate-800">${body}</div></div>`;
+
+      // 按模型拆分的 token 消耗面板
+      const mt = (meta.model_tokens || {});
+      const entries = Object.entries(mt).filter(([, v]) => v > 0);
+      const tokenPanel = `
+        <div class="mt-3 border border-slate-100 rounded-lg p-3 bg-slate-50">
+          <div class="text-xs font-semibold text-slate-500 mb-2">Token 消耗（按模型）</div>
+          <div class="flex flex-wrap gap-2">
+            ${entries.length
+              ? entries.map(([m, v]) => `<span class="text-xs px-2 py-1 rounded-full bg-indigo-50 text-indigo-700">${esc(mLabel(m))} · ${v}</span>`).join("")
+              : '<span class="text-xs text-slate-400">无（规则模式未调用大模型）</span>'}
+          </div>
+          <div class="text-[11px] text-slate-400 mt-1.5">合计 ${meta.tokens || 0} token · LLM 调用 ${meta.llm_calls || 0} 次</div>
+        </div>`;
+
       $("result").innerHTML = `
         <h2 class="text-sm font-semibold text-slate-700 mb-3">结案结果</h2>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -316,7 +345,8 @@
           ${card("人工确认", `${a.approved ? "<span class='text-green-600'>已批准</span>" : "<span class='text-red-600'>驳回/未批</span>"}<div class='text-xs text-slate-500 mt-1'>${esc(a.status || "")} · ${esc(a.approver || "")}</div>`)}
           ${card("质检", `${q.passed ? "<span class='text-green-600'>通过</span>" : "<span class='text-red-600'>未通过</span>"} · 得分 ${q.score ?? "—"}<div class='text-xs text-slate-500 mt-1'>${(q.issues && q.issues.length) ? "问题：" + esc(q.issues.join("、")) : "无遗留问题"}</div>`)}
         </div>
-        ${rp.summary ? `<div class="mt-3">${card("复盘报告", `${esc(rp.summary)}${(rp.recommendations || []).length ? `<ul class='list-disc ml-5 mt-1 text-xs text-slate-600'>${rp.recommendations.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}`)}</div>` : ""}`;
+        ${rp.summary ? `<div class="mt-3">${card("复盘报告", `${esc(rp.summary)}${(rp.recommendations || []).length ? `<ul class='list-disc ml-5 mt-1 text-xs text-slate-600'>${rp.recommendations.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}`)}</div>` : ""}
+        ${tokenPanel}`;
       $("result").classList.remove("hidden");
     }
 
@@ -346,7 +376,7 @@
         card("需人工确认比例", pct(m.approval_required_rate), "成本超阈值"),
         card("总处置成本", "¥" + Math.round(m.total_cost), `均值 ¥${Math.round(m.avg_cost)}/单`),
         card("平均步骤数", m.avg_steps.toFixed(1), "经 Agent 节点"),
-        card("Token 消耗", m.total_tokens, `LLM 调用 ${m.total_llm_calls} 次`),
+        card("Token 消耗", m.total_tokens, `LLM 调用 ${m.total_llm_calls} 次${Object.keys(m.model_usage || {}).length ? ` · ${Object.keys(m.model_usage).length} 个模型` : ""}`),
         card("平均 LLM 调用", m.total_llm_calls ? (m.total_llm_calls / m.total).toFixed(1) : "0", "每单"),
       ].join("");
 
@@ -387,6 +417,34 @@
         },
       });
 
+      // 各模型 token 消耗（横向条形）
+      const mu = m.model_usage || {};
+      const muEntries = Object.entries(mu).filter(([, v]) => v > 0);
+      if (modelTokenChart) modelTokenChart.destroy();
+      modelTokenChart = new Chart($("chart-model-tokens"), {
+        type: "bar",
+        data: {
+          labels: muEntries.map(([name]) => mLabel(name)),
+          datasets: [{
+            label: "Token",
+            data: muEntries.map(([, v]) => v),
+            backgroundColor: ["#4f46e5", "#10b981", "#f59e0b", "#ef4444", "#0ea5e9"],
+          }],
+        },
+        options: {
+          indexAxis: "y",
+          responsive: true, maintainAspectRatio: false,
+          scales: { x: { beginAtZero: true } },
+          plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => c.parsed.x + " token" } } },
+        },
+      });
+      $("model-tokens-legend").innerHTML = muEntries.length
+        ? muEntries.map(([name, v]) => `<div class="flex items-center justify-between border-b border-slate-100 py-1.5">
+            <span class="text-slate-700">${esc(mLabel(name))}</span>
+            <span class="font-semibold text-slate-900">${v}<span class="text-slate-400 font-normal"> token</span></span>
+          </div>`).join("")
+        : '<div class="text-slate-400">无（规则模式下未调用大模型，Token 恒为 0）</div>';
+
       // 明细表
       const head = `<tr class="text-slate-500 border-b border-slate-200">
         <th class="text-left py-1.5 pr-2">工单</th><th class="text-left">类型</th><th class="text-left">紧急度</th>
@@ -425,6 +483,11 @@
     (async () => {
       $("mode-badge").textContent = "规则/LLM 自动切换";
       $("mode-badge").className = "px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700";
+      try {
+        const mr = await fetch("/api/models");
+        const mj = await mr.json();
+        MODEL_LABELS = Object.fromEntries((mj.models || []).map(m => [m.name, m.label]));
+      } catch (_) { /* 模型名回退为原始 key */ }
     })();
     loadTickets();
   </script>

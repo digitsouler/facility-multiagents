@@ -1,11 +1,11 @@
 {
   "default": "deepseek",
   "agent_routing": {
-    "intake": "deepseek",
+    "intake": "qwen",
     "diagnose": "deepseek",
-    "dispatch": "deepseek"
+    "dispatch": "zhipu"
   },
-  "ensemble": ["deepseek", "qwen"],
+  "ensemble": ["deepseek", "qwen", "zhipu"],
   "models": {
     "deepseek": {
       "label": "DeepSeek",
@@ -18,15 +18,15 @@
     "qwen": {
       "label": "通义千问 Qwen",
       "api_key_env": "QWEN_API_KEY",
-      "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-      "model": "qwen-plus",
+      "base_url": "https://llm-lj5j7x15f589kq9t.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+      "model": "qwen3.7-plus",
       "enabled": false
     },
     "zhipu": {
       "label": "智谱 GLM",
       "api_key_env": "ZHIPU_API_KEY",
       "base_url": "https://open.bigmodel.cn/api/paas/v4",
-      "model": "glm-4-flash",
+      "model": "glm-5.2",
       "enabled": false
     },
     "ollama": {

@@ -151,6 +151,11 @@ def usage_breakdown() -> dict:
     return {name: c.total_tokens for name, c in _REGISTRY.items()}
 
 
+def calls_breakdown() -> dict:
+    """各模型已调用次数快照（与 usage_breakdown 配套，供 Dashboard 按模型拆分计量）。"""
+    return {name: c.call_count for name, c in _REGISTRY.items()}
+
+
 def total_tokens_all() -> int:
     return sum(c.total_tokens for c in _REGISTRY.values())
 
