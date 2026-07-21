@@ -35,6 +35,7 @@
     <div class="max-w-6xl mx-auto px-5 flex gap-6 text-sm border-t border-slate-100">
       <button id="tab-pipeline" class="tab active py-2.5 font-medium">流水线</button>
       <button id="tab-eval" class="tab py-2.5 font-medium text-slate-500">评估报告</button>
+      <button id="tab-memory" class="tab py-2.5 font-medium text-slate-500">记忆层</button>
     </div>
   </header>
 
@@ -127,6 +128,32 @@
     <div class="bg-white border border-slate-200 rounded-xl p-4">
       <h3 class="text-sm font-semibold text-slate-700 mb-3">逐工单明细</h3>
       <div id="eval-table" class="overflow-x-auto"></div>
+    </div>
+  </main>
+
+  <!-- 记忆层视图（Phase 6.4） -->
+  <main id="view-memory" class="max-w-6xl mx-auto px-5 py-5 hidden">
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <h2 class="text-base font-semibold text-slate-800">记忆层 · 经验自学习</h2>
+        <p class="text-xs text-slate-500 mt-0.5">事件记忆 + 资产档案 + 沉淀知识：分层跨楼宇检索、时间衰减、自动归档</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <span id="mem-disabled" class="text-xs text-amber-600 hidden">记忆存储不可用（已降级为规则模式）</span>
+        <button id="mem-maintain"
+          class="px-3 py-1.5 rounded-lg border border-slate-200 text-sm text-slate-600 hover:bg-slate-100">运行记忆维护（沉淀+归档）</button>
+      </div>
+    </div>
+    <div id="mem-cards" class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5"></div>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div class="bg-white border border-slate-200 rounded-xl p-4">
+        <h3 class="text-sm font-semibold text-slate-700 mb-3">近期事件记忆</h3>
+        <div id="mem-recent" class="space-y-2 max-h-[60vh] overflow-y-auto"></div>
+      </div>
+      <div class="bg-white border border-slate-200 rounded-xl p-4">
+        <h3 class="text-sm font-semibold text-slate-700 mb-3">沉淀知识（长期不衰减）</h3>
+        <div id="mem-kb" class="space-y-2 max-h-[60vh] overflow-y-auto"></div>
+      </div>
     </div>
   </main>
 
@@ -302,8 +329,8 @@
       });
 
       es.addEventListener("done", (ev) => {
-        const { result, tokens, model_tokens, llm_calls } = JSON.parse(ev.data);
-        renderResult(result, { tokens, model_tokens, llm_calls });
+        const { result, tokens, model_tokens, llm_calls, memory_written } = JSON.parse(ev.data);
+        renderResult(result, { tokens, model_tokens, llm_calls, memory_written });
         closeES();
       });
 
@@ -327,6 +354,14 @@
     function renderResult(r, meta) {
       // meta 优先取实时推送的 token；从 /api/result 复看时 token 已并入 r
       meta = meta || { tokens: r.tokens, model_tokens: r.model_tokens, llm_calls: r.llm_calls };
+      // 本次写入记忆差量（来自 done 事件；复看场景无此字段则显示中性提示）
+      const mw = meta.memory_written || {};
+      const memTotal = (mw.incidents || 0) + (mw.asset_knowledge || 0) + (mw.kb || 0);
+      const memBadge = memTotal > 0
+        ? `<div class="mt-3 text-xs px-3 py-2 rounded-lg bg-violet-50 border border-violet-200 text-violet-800">
+             🧠 本次已写入记忆：事件记忆 +${mw.incidents || 0} · 资产档案 +${mw.asset_knowledge || 0}${mw.kb ? ` · 沉淀知识 +${mw.kb}` : ""}
+           </div>`
+        : `<div class="mt-3 text-xs px-3 py-2 rounded-lg bg-slate-50 border border-slate-100 text-slate-500">本次未触发记忆写入（或记忆存储不可用）</div>`;
       const d = r.diagnosis || {}, p = r.dispatch_plan || {}, a = r.approval || {}, q = r.qa || {}, rp = r.report || {};
       const card = (title, body) => `<div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
         <div class="text-xs font-semibold text-slate-500 mb-1">${title}</div><div class="text-sm text-slate-800">${body}</div></div>`;
@@ -382,6 +417,7 @@
         </div>
         ${rp.summary ? `<div class="mt-3">${card("复盘报告", `${esc(rp.summary)}${(rp.recommendations || []).length ? `<ul class='list-disc ml-5 mt-1 text-xs text-slate-600'>${rp.recommendations.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}`)}</div>` : ""}
         ${toolTrail}
+        ${memBadge}
         ${tokenPanel}`;
       $("result").classList.remove("hidden");
     }
@@ -503,18 +539,96 @@
 
     /* ---------- Tab 切换 ---------- */
     function switchTab(which) {
-      const onP = which === "pipeline";
-      $("view-pipeline").classList.toggle("hidden", !onP);
-      $("view-eval").classList.toggle("hidden", onP);
-      $("tab-pipeline").classList.toggle("active", onP);
-      $("tab-eval").classList.toggle("active", !onP);
-      $("tab-pipeline").classList.toggle("text-slate-500", !onP);
-      $("tab-eval").classList.toggle("text-slate-500", onP);
-      if (!onP) loadEval(false);
+      const views = { pipeline: "view-pipeline", eval: "view-eval", memory: "view-memory" };
+      const tabs = { pipeline: "tab-pipeline", eval: "tab-eval", memory: "tab-memory" };
+      Object.entries(views).forEach(([k, id]) => {
+        $(id).classList.toggle("hidden", k !== which);
+        $(tabs[k]).classList.toggle("active", k === which);
+        $(tabs[k]).classList.toggle("text-slate-500", k !== which);
+      });
+      if (which === "eval") loadEval(false);
+      if (which === "memory") loadMemory(true);
     }
     $("tab-pipeline").addEventListener("click", () => switchTab("pipeline"));
     $("tab-eval").addEventListener("click", () => switchTab("eval"));
+    $("tab-memory").addEventListener("click", () => switchTab("memory"));
     $("eval-reload").addEventListener("click", () => loadEval(true));
+
+    /* ---------- 记忆层（Phase 6.4） ---------- */
+    let memoryData = null;
+    function ageDays(created_at) {
+      try {
+        const t = new Date(String(created_at).replace(" ", "T") + (String(created_at).includes("+") ? "" : "")).getTime();
+        return Math.max(0, Math.floor((Date.now() - t) / 86400000));
+      } catch (_) { return 0; }
+    }
+    async function loadMemory(force) {
+      if (memoryData && !force) { renderMemory(memoryData); return; }
+      $("mem-cards").innerHTML = `<div class="col-span-full text-sm text-slate-400">加载记忆…</div>`;
+      try {
+        const r = await fetch("/api/memory");
+        memoryData = await r.json();
+        renderMemory(memoryData);
+      } catch (e) {
+        $("mem-cards").innerHTML = `<div class="col-span-full text-sm text-red-600">记忆接口出错：${esc(e)}</div>`;
+      }
+    }
+    function renderMemory(d) {
+      if (d.disabled) $("mem-disabled").classList.remove("hidden");
+      const s = d.stats || {};
+      const card = (t, v, sub) => `<div class="bg-white border border-slate-200 rounded-xl p-3">
+        <div class="text-xs text-slate-500">${t}</div>
+        <div class="text-lg font-semibold text-slate-900 mt-0.5">${v}</div>
+        ${sub ? `<div class="text-[11px] text-slate-400 mt-0.5">${sub}</div>` : ""}</div>`;
+      $("mem-cards").innerHTML = [
+        card("事件记忆", s.incidents ?? 0, "活跃检索集"),
+        card("资产档案", s.asset_knowledge ?? 0, "设备维修档案"),
+        card("沉淀知识", s.kb_learnings ?? 0, "长期不衰减"),
+        card("已归档", s.archived ?? 0, `保留期 ${365} 天`),
+      ].join("");
+
+      const recents = (d.recent || []).map(r => {
+        const v = r.outcome_valid === 1
+          ? `<span class='text-[11px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700'>有效</span>`
+          : (r.outcome_valid === 0
+            ? `<span class='text-[11px] px-1.5 py-0.5 rounded bg-red-50 text-red-700'>无效</span>`
+            : `<span class='text-[11px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500'>未知</span>`);
+        const age = ageDays(r.created_at);
+        const ageTxt = age === 0 ? "今天" : `${age} 天前`;
+        return `<div class="text-xs border border-slate-100 rounded-lg px-3 py-2">
+          <div class="flex items-center justify-between">
+            <span class="font-semibold text-slate-700">${esc(r.building || "—")} · ${esc(r.asset_id || r.asset_type)}</span>
+            ${v}
+          </div>
+          <div class="text-slate-600 mt-1">根因：${esc(r.root_cause)}</div>
+          <div class="text-[11px] text-slate-400 mt-1">${esc(r.ticket_type)} · ${ageTxt} · 置信度 ${(r.confidence || 0).toFixed(2)}</div>
+        </div>`;
+      }).join("");
+      $("mem-recent").innerHTML = recents || `<div class="text-sm text-slate-400">暂无事件记忆</div>`;
+
+      const kbs = (d.kb || []).map(k => `<div class="text-xs border border-slate-100 rounded-lg px-3 py-2">
+        <div class="text-slate-700">根因：${esc(k.root_cause)}</div>
+        <div class="text-slate-600 mt-1">处置：${esc(k.recommended_action)}</div>
+        <div class="text-[11px] text-slate-400 mt-1">${esc(k.ticket_type)} / ${esc(k.asset_type)} · 权重 ${Number(k.weight || 1).toFixed(1)}</div>
+      </div>`).join("");
+      $("mem-kb").innerHTML = kbs || `<div class="text-sm text-slate-400">暂无沉淀知识（运行流水线并经 QA 校验后会自动沉淀）</div>`;
+    }
+    $("mem-maintain").addEventListener("click", async () => {
+      const btn = $("mem-maintain");
+      btn.disabled = true; btn.textContent = "维护中…";
+      try {
+        const r = await fetch("/api/memory/maintain", { method: "POST" });
+        const j = await r.json();
+        const c = j.consolidate || {}, a = j.archive || {};
+        alert(`记忆维护完成：沉淀 ${c.promoted || 0} 条事件 → 新增 ${c.kb_added || 0} / 更新 ${c.kb_updated || 0} 沉淀知识；归档 ${a.archived || 0} 条。`);
+        memoryData = null;
+        loadMemory(true);
+      } catch (e) {
+        alert("记忆维护失败：" + esc(e));
+      } finally {
+        btn.disabled = false; btn.textContent = "运行记忆维护（沉淀+归档）";
+      }
+    });
 
     /* ---------- 绑定 ---------- */
     $("run-btn").addEventListener("click", run);

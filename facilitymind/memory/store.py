@@ -39,7 +39,33 @@ CREATE TABLE IF NOT EXISTS incidents (
     recurrence     INTEGER,
     evidence       TEXT,
     outcome_valid  INTEGER,
+    promoted       INTEGER DEFAULT 0,
     created_at     TEXT
+);
+CREATE TABLE IF NOT EXISTS incidents_archive (
+    archive_id     INTEGER PRIMARY KEY AUTOINCREMENT,
+    id             INTEGER,
+    ticket_id      TEXT,
+    ticket_type    TEXT,
+    building       TEXT,
+    asset_id       TEXT,
+    asset_type     TEXT,
+    urgency        TEXT,
+    root_cause     TEXT,
+    recommended_action TEXT,
+    required_skill TEXT,
+    vendor         TEXT,
+    cost           REAL,
+    estimated_cost REAL,
+    actual_response_min REAL,
+    sla_hours      INTEGER,
+    confidence     REAL,
+    recurrence     INTEGER,
+    evidence       TEXT,
+    outcome_valid  INTEGER,
+    promoted       INTEGER DEFAULT 0,
+    created_at     TEXT,
+    archived_at    TEXT
 );
 CREATE TABLE IF NOT EXISTS asset_knowledge (
     asset_id       TEXT PRIMARY KEY,
@@ -79,10 +105,23 @@ class MemoryStore:
             self._conn.row_factory = sqlite3.Row
             self._conn.executescript(_SCHEMA)
             self._conn.commit()
+            self._migrate()  # 老库补列（promoted），新建表（incidents_archive）
         except Exception as exc:  # 任何初始化失败 → 降级
             self.disabled = True
             self._conn = None
             self._error = f"{type(exc).__name__}: {exc}"
+
+    def _migrate(self) -> None:
+        """兼容已存在的库：补 promoted 列；新建 incidents_archive 表（CREATE 已含）。"""
+        if self.disabled or self._conn is None:
+            return
+        try:
+            cols = [r["name"] for r in self._conn.execute("PRAGMA table_info(incidents)").fetchall()]
+            if "promoted" not in cols:
+                self._conn.execute("ALTER TABLE incidents ADD COLUMN promoted INTEGER DEFAULT 0")
+                self._conn.commit()
+        except Exception:
+            pass
 
     # ---- 写入：事件记忆 ----
     def add_incident(self, *, ticket_id, ticket_type, building, asset_id, asset_type,
@@ -220,6 +259,103 @@ class MemoryStore:
         except Exception:
             return []
 
+    # ---- 写入（沉淀/归档专用，供 decay.py 调用）----
+    def get_unpromoted_validated(self, limit: int = 500) -> list[dict]:
+        """取出"经 QA 校验有效且尚未沉淀"的事件记忆（供 consolidate 沉淀为长期知识）。"""
+        if self.disabled:
+            return []
+        try:
+            rows = self._conn.execute(
+                "SELECT * FROM incidents WHERE outcome_valid=1 AND promoted=0 "
+                "ORDER BY id DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+            return [dict(r) for r in rows]
+        except Exception:
+            return []
+
+    def mark_promoted(self, ids: list[int]) -> None:
+        """标记事件记忆已沉淀（避免重复沉淀）。"""
+        if self.disabled or not ids:
+            return
+        try:
+            q = "UPDATE incidents SET promoted=1 WHERE id IN ({})".format(
+                ",".join("?" * len(ids))
+            )
+            self._conn.execute(q, tuple(ids))
+            self._conn.commit()
+        except Exception:
+            pass
+
+    def upsert_kb(self, *, ticket_type, asset_type, root_cause, recommended_action,
+                  delta_weight: float = 1.0) -> Optional[int]:
+        """沉淀知识 upsert：同 (type, asset_type, root_cause) 累加权重，否则新建。"""
+        if self.disabled:
+            return None
+        try:
+            row = self._conn.execute(
+                "SELECT id, weight FROM kb_learnings "
+                "WHERE ticket_type=? AND asset_type=? AND root_cause=?",
+                (ticket_type, asset_type, root_cause),
+            ).fetchone()
+            if row:
+                new_w = row["weight"] + delta_weight
+                self._conn.execute(
+                    "UPDATE kb_learnings SET weight=?, recommended_action=? WHERE id=?",
+                    (new_w, recommended_action, row["id"]),
+                )
+                self._conn.commit()
+                return row["id"]
+            cur = self._conn.execute(
+                """INSERT INTO kb_learnings
+                   (ticket_type, asset_type, root_cause, recommended_action, weight, created_at)
+                   VALUES (?,?,?,?,?,?)""",
+                (ticket_type, asset_type, root_cause, recommended_action, delta_weight,
+                 datetime.now().isoformat(timespec="seconds")),
+            )
+            self._conn.commit()
+            return cur.lastrowid
+        except Exception:
+            return None
+
+    def select_for_archive(self, cutoff_iso: str, limit: int = 1000) -> list[int]:
+        """取出早于 cutoff 的事件记忆 id（供归档）。"""
+        if self.disabled:
+            return []
+        try:
+            rows = self._conn.execute(
+                "SELECT id FROM incidents WHERE created_at < ? ORDER BY id ASC LIMIT ?",
+                (cutoff_iso, limit),
+            ).fetchall()
+            return [r["id"] for r in rows]
+        except Exception:
+            return []
+
+    def archive_incidents(self, ids: list[int]) -> int:
+        """把给定事件记忆复制到归档表并从活跃表删除；返回实际归档条数。"""
+        if self.disabled or not ids:
+            return 0
+        try:
+            n = 0
+            arch = datetime.now().isoformat(timespec="seconds")
+            for iid in ids:
+                row = self._conn.execute("SELECT * FROM incidents WHERE id=?", (iid,)).fetchone()
+                if not row:
+                    continue
+                cols = [c for c in row.keys()]
+                placeholders = ",".join("?" * len(cols))
+                self._conn.execute(
+                    f"INSERT OR IGNORE INTO incidents_archive ({','.join(cols)}, archived_at) "
+                    f"VALUES ({placeholders}, ?)",
+                    tuple(row) + (arch,),
+                )
+                self._conn.execute("DELETE FROM incidents WHERE id=?", (iid,))
+                n += 1
+            self._conn.commit()
+            return n
+        except Exception:
+            return 0
+
     # ---- 统计 ----
     def stats(self) -> dict:
         if self.disabled:
@@ -228,8 +364,9 @@ class MemoryStore:
             n_inc = self._conn.execute("SELECT COUNT(*) FROM incidents").fetchone()[0]
             n_ast = self._conn.execute("SELECT COUNT(*) FROM asset_knowledge").fetchone()[0]
             n_kb = self._conn.execute("SELECT COUNT(*) FROM kb_learnings").fetchone()[0]
+            n_arch = self._conn.execute("SELECT COUNT(*) FROM incidents_archive").fetchone()[0]
             return {"disabled": False, "incidents": n_inc,
-                    "asset_knowledge": n_ast, "kb_learnings": n_kb}
+                    "asset_knowledge": n_ast, "kb_learnings": n_kb, "archived": n_arch}
         except Exception:
             return {"disabled": True, "error": "stats failed"}
 

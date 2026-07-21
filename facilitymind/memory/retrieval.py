@@ -72,9 +72,17 @@ def get_asset_context(ticket: dict) -> dict | None:
     return store.get_asset_knowledge(asset_id) if asset_id else None
 
 
-def format_memory_context(similar: list[dict], asset_ctx: dict | None) -> str:
+def get_kb_context(ticket: dict, limit: int = 5) -> list[dict]:
+    """返回已沉淀的长期知识（经 QA 校验、不衰减），供 Diagnose 直接参考。"""
+    store = get_store()
+    if store.disabled:
+        return []
+    return store.get_kb_learnings(ticket_type=ticket["type"], asset_type=ticket["type"], limit=limit)
+
+
+def format_memory_context(similar: list[dict], asset_ctx: dict | None, kb: list[dict] | None = None) -> str:
     """把检索结果拼成可注入 LLM 提示词的文本。无记忆返回空串。"""
-    if not similar and not asset_ctx:
+    if not similar and not asset_ctx and not kb:
         return ""
     parts = []
     if asset_ctx:
@@ -93,4 +101,11 @@ def format_memory_context(similar: list[dict], asset_ctx: dict | None) -> str:
                 f"处置：{r.get('recommended_action')}；质检{tag}"
             )
         parts.append("相似历史工单（按相关度）：\n" + "\n".join(lines))
+    if kb:
+        lines = []
+        for k in kb[:3]:
+            lines.append(
+                f"- 根因：{k.get('root_cause')}；处置：{k.get('recommended_action')}（权重 {float(k.get('weight', 1)):.1f}）"
+            )
+        parts.append("沉淀知识（经 QA 校验，长期有效、跨楼宇可复用）：\n" + "\n".join(lines))
     return "\n\n参考历史经验：\n" + "\n".join(parts)

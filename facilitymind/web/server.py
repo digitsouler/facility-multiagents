@@ -25,6 +25,7 @@ from ..dataio import load_tickets
 from ..eval import aggregate, run_one
 from ..graph import app as engine
 from ..llm import calls_breakdown, list_models, usage_breakdown
+from ..memory import get_store
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 
@@ -161,6 +162,27 @@ def api_eval():
     return {"metrics": metrics, "records": records}
 
 
+@api.get("/api/memory")
+def api_memory():
+    """记忆层看板：统计 + 近期事件记忆 + 沉淀知识。记忆不可用时安全降级。"""
+    store = get_store()
+    if store.disabled:
+        return {"disabled": True, "stats": store.stats()}
+    return {
+        "disabled": False,
+        "stats": store.stats(),
+        "recent": store.get_incidents(limit=12),
+        "kb": store.get_kb_learnings(limit=12),
+    }
+
+
+@api.post("/api/memory/maintain")
+def api_memory_maintain():
+    """记忆维护：沉淀（QA 有效处置→长期知识）+ 归档（超期事件记忆）。"""
+    from ..memory.decay import run_maintenance
+    return run_maintenance()
+
+
 def _run_stream(ticket: dict, auto_approve: bool, pace: float, ensemble: bool = False) -> Iterator[str]:
     """逐节点运行流水线并以 SSE 事件产出；auto_approve=False 时支持 M3 网页人工确认。"""
     config = {"configurable": {"thread_id": ticket["id"]}}
@@ -170,6 +192,8 @@ def _run_stream(ticket: dict, auto_approve: bool, pace: float, ensemble: bool = 
     # 并发跑多条流水线时差值可能互串，Demo 场景为单流顺序执行，足够准确。
     _before_tok = usage_breakdown()
     _before_call = calls_breakdown()
+    # 记忆库快照：结束后做差得出"本单写入"的记忆条数（事件/资产/沉淀知识）。
+    _before_mem = get_store().stats()
 
     yield _sse("start", {"ticket_id": ticket["id"], "order": NODE_ORDER})
 
@@ -228,6 +252,13 @@ def _run_stream(ticket: dict, auto_approve: bool, pace: float, ensemble: bool = 
             "model_calls": model_calls,
             "llm_calls": calls,
         }
+        # 记忆写入差量（本单新沉淀的事件记忆/资产档案/沉淀知识）
+        _after_mem = get_store().stats()
+        memory_written = {
+            "incidents": max(0, _after_mem.get("incidents", 0) - _before_mem.get("incidents", 0)),
+            "asset_knowledge": max(0, _after_mem.get("asset_knowledge", 0) - _before_mem.get("asset_knowledge", 0)),
+            "kb": max(0, _after_mem.get("kb_learnings", 0) - _before_mem.get("kb_learnings", 0)),
+        }
         yield _sse(
             "done",
             {
@@ -236,6 +267,7 @@ def _run_stream(ticket: dict, auto_approve: bool, pace: float, ensemble: bool = 
                 "tokens": tokens,
                 "model_tokens": model_tokens,
                 "llm_calls": calls,
+                "memory_written": memory_written,
             },
         )
     except Exception as exc:  # 兜底：任何异常都通过 SSE 反馈前端，避免连接静默中断

@@ -12,7 +12,7 @@ from ..dataio import load_tickets
 from ..knowledge import KB
 from ..llm import extract_json, get_agent_client, get_ensemble_clients
 from ..mcp import providers
-from ..memory.retrieval import retrieve_similar, get_asset_context, format_memory_context
+from ..memory.retrieval import retrieve_similar, get_asset_context, get_kb_context, format_memory_context
 from ..state import Diagnosis, FacilityState, ToolCall
 
 
@@ -102,11 +102,12 @@ def diagnose_agent(state: FacilityState) -> dict:
     kb = KB.get(ticket["type"], KB["cleaning"])
     recurrence = _check_recurrence(ticket)
 
-    # 检索持久化记忆：相似历史事件 + 资产档案，注入 LLM 提示词。
-    # 记忆不可用时 retrieve_similar 返回空，照常走 KB，不中断流水线。
+    # 检索持久化记忆：相似历史事件 + 资产档案 + 沉淀知识，注入 LLM 提示词。
+    # 记忆不可用时各检索均返回空，照常走 KB，不中断流水线。
     similar = retrieve_similar(ticket)
     asset_ctx = get_asset_context(ticket)
-    memory_ctx_str = format_memory_context(similar, asset_ctx)
+    kb_ctx = get_kb_context(ticket)
+    memory_ctx_str = format_memory_context(similar, asset_ctx, kb_ctx)
 
     # 先尝试拉取该工单对应资产的 IoT 实时遥测，作为证据化诊断的输入。
     # 任何失败（无对应传感器 / server 未起 / 超时）都回退 KB，不中断流水线。

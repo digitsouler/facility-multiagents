@@ -11,7 +11,7 @@
 
 ## Why FacilityMind
 
-物业与设施管理里大量工作是"接报修 → 判原因 → 派工人 → 验质量 → 出报告"的重复链路。
+物业设施管理里大量工作是"接报修 → 判原因 → 派工人 → 验质量 → 出报告"的重复链路。
 单 Agent 聊天机器人解决不了跨系统、跨专业的闭环；FacilityMind 用**多个有明确职责的 Agent + 状态机编排**，
 把这条链路自动化、可追溯、可干预。
 
@@ -21,18 +21,17 @@
 | ------------------- | ------------------------------------------------------------------- |
 | 🧠 多 Agent 协作       | Intake / Diagnose / Dispatch / Approval / QA / Report 六 Agent 流水线闭环 |
 | 🛡️ 可控编排            | LangGraph 状态机，节点可审计、可重放、可扩展                                         |
-| 🤝 多模型协作            | 支持多模型配置，可按 Agent 路由；Diagnose 阶段可多模型集成并合成结论 |
-| ✋ Human-in-the-Loop | 高价值派单自动暂停，经 interrupt() 等待人工确认，可批准/驳回                               |
-| ✅ QA 质检             | 模拟现场执行并对照检查清单逐项核验，输出通过与综合评分                                         |
-| 📝 复盘报告             | Report Agent 自动生成结案摘要与可执行的优化建议                                      |
-| 📈 评估 Harness       | 一键批量跑工单，量化任务完成率 / QA 通过率 / SLA 达成率 / 成本 / token，输出 Markdown + JSON  |
 | 🔌 LLM 可插拔          | 有 Key 走大模型，无 Key 走规则库，二者无缝切换；支持 DeepSeek / Qwen / 智谱 / Ollama 多家模型  |
 | 📚 内置知识库            | 8 类常见设施故障的处理经验 + 每类 QA 检查清单，离线可用                                    |
+| 🤝 多模型协作            | 支持多模型配置，可按 Agent 路由；Diagnose 阶段可多模型集成并合成结论 |
+| 🔗 MCP 工具接入        | Agent 通过 MCP 协议调用真实业务系统（内置 IoT 传感器），实现"证据化诊断"；不可用时自动回退规则库 |
+| ✋ Human-in-the-Loop | 高价值派单自动暂停等待人工确认，可批准/驳回                               |
+| ✅ QA 质检             | 模拟现场执行并对照检查清单逐项核验，输出通过与综合评分                                         |
+| 📝 复盘报告             | Report Agent 自动生成结案摘要与可执行的优化建议                                      |
+| 🧠 经验记忆层          | 每单工单结案自动写回记忆；诊断/派单时分层检索历史经验（同楼宇同资产→跨楼宇同类型→同故障类型），越跑越准 |
 | 🔁 历史感知             | 识别同一位置重复故障并自动升级处置                                                   |
-| 🆚 规则 vs LLM 对比     | `--compare` 并排展示规则库与 DeepSeek 的结论差异，验证模型是否真起作用                      |
+| 📈 评估 Harness       | 一键批量跑工单，量化任务完成率 / QA 通过率 / SLA 达成率 / 成本 / token，输出 Markdown + JSON  |
 | 🖥️ Web Dashboard   | 打开浏览器即可看 6-Agent 流水线实时点亮，并在网页内做人工确认、看评估图表                           |
-| 🔗 MCP 工具接入        | Agent 通过 MCP 协议调用真实业务系统（内置 IoT 传感器），实现"证据化诊断"；server 不可用时自动回退规则库 |
-| 📊 结构化输出            | 每条工单产出根因、处置、成本、SLA、派单、质检、报告全链路                                      |
 
 ## Quick Start
 
@@ -42,31 +41,23 @@
 cd facilitymind
 python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-
-# 跑一个电梯故障场景（无需任何 API Key）
-python -m facilitymind.cli --scenario elevator_fault
-
-# 或跑全部 20 条内置示例工单
-python -m facilitymind.cli --all
 ```
-
-
 ### 接入真实大模型（可选）
 
 FacilityMind 支持**多模型共存与协作**，不是只绑一个 provider：
 
 - 复制 `.env.example` 为 `.env`，填入兼容 OpenAI 的接口；
-- 再在 `facilitymind/models.json` 里声明各家模型（已内置 DeepSeek / 通义千问 Qwen / 智谱 GLM / Ollama 本地）。
+- 再在 `facilitymind/models.json` 里声明各模型（已内置 DeepSeek / 通义千问 Qwen / 智谱 GLM / Ollama 本地）。
 
 ```bash
 cp .env.example .env
 # 编辑 .env：可填一个或多个模型的 API Key
-# LLM_API_KEY=sk-xxx          # DeepSeek（默认）
+# LLM_API_KEY=sk-xxx          # DeepSeek
 # QWEN_API_KEY=sk-xxx         # 通义千问
 # ZHIPU_API_KEY=xxx           # 智谱 GLM
 # OLLAMA_API_KEY=ollama       # 本地 Ollama
 ```
-不设则自动进入离线规则模式；填了任意 Key 后，对应模型即自动启用，且任意 API 错误都会安全回退规则库。`models.json` 里可进一步配置。
+不设则自动进入离线规则模式；填了任意 Key 后，对应模型即自动启用，且任意 API 错误都会安全回退规则库。
 
 > 只要对应 `*_API_KEY` 非空，CLI / eval / Dashboard 即自动启用对应模型。
 
@@ -119,11 +110,9 @@ python -m facilitymind.cli --id T-001 --compare-models
    建议 · 属高价值工单，建议评估年度维保框架合同以锁定单价，降低单次处置成本。
 ====================================================================
 ```
-> 质检未通过的工单会列出具体未达标项（如「维修前后影像留痕」「作业人员资质核验」），并在结案建议中提示加强过程管理。
-
 ## 评估 Harness
 
-把多 Agent 工作流当成**可度量系统**来跑，而不是只看单条 demo。一键得到这套方案"好不好用"的量化证据：
+把多Agent 工作流当成**可度量系统**来跑，而不是只看单条 demo。一键得到这套方案"好不好用"的量化证据：
 
 ```bash
 # 评估全部 20 条内置工单，终端直接看汇总 + 明细
@@ -144,6 +133,18 @@ python -m facilitymind.eval --all --quiet
 
 ![在线 LLM 评估报告示例](docs/images/eval-report-t001.png)
 
+## Web Dashboard
+
+把"接报修 → 诊断 → 派单 → 人工确认 → 质检 → 报告"的全链路搬进浏览器：
+打开页面即可看到 6 个 Agent 节点**实时点亮**、每步产出同步展示；高成本派单会在网页内弹出审批卡片，点「批准 / 驳回」后流程继续；
+还有独立的「评估报告」页，用图表呈现完成率 / QA / SLA / 成本等量化指标；勾选「多模型集成 Ensemble」后，Diagnose 阶段会调用多个模型，并在结案结果中展示每个模型的 Token 消耗。
+```bash
+# 启动 Dashboard（默认 http://127.0.0.1:8000）
+python -m facilitymind.web
+
+# 指定端口
+python -m facilitymind.web --port 9000
+```
 
 ## 多Agent
 ```mermaid
@@ -167,7 +168,7 @@ graph LR
 | **Report Agent**   | 汇总全线结论，生成结案摘要与可执行的优化建议                              |
 
 
-## 多模型协作
+## 多模型
 
 FacilityMind 的 LLM 层不是单例，而是一个**可扩展的 Model Registry**。
 
@@ -199,27 +200,6 @@ FacilityMind 的 LLM 层不是单例，而是一个**可扩展的 Model Registry
 ![Web Dashboard 多模型 Token 消耗](docs/images/dashboard-multi-model-tokens.png)
 
 > 上图：Dashboard 运行 T-001 时，Diagnose 阶段启用了 DeepSeek + 通义千问 + 智谱三家 Ensemble，结案面板直接展示每家模型消耗的 Token 数。
-
-## Web Dashboard
-
-把"接报修 → 诊断 → 派单 → 人工确认 → 质检 → 报告"的全链路搬进浏览器：
-打开页面即可看到 6 个 Agent 节点**实时点亮**、每步产出同步展示；高成本派单会在网页内弹出审批卡片，点「批准 / 驳回」后流程继续；
-还有独立的「评估报告」页，用图表呈现完成率 / QA / SLA / 成本等量化指标；勾选「多模型集成 Ensemble」后，Diagnose 阶段会调用多个模型，并在结案结果中展示每个模型的 Token 消耗。
-```bash
-# 启动 Dashboard（默认 http://127.0.0.1:8000）
-python -m facilitymind.web
-
-# 指定端口
-python -m facilitymind.web --port 9000
-```
-
-打开浏览器后的玩法：
-
-- **流水线页**：左侧选工单 → 点「运行流水线」→ 右侧 6 节点依次亮起，每步结论实时滚动。
-- **人工确认（M3）**：取消勾选「自动批准」，成本超阈值（¥2000）的工单会在网页内暂停并弹出审批卡，批准/驳回后流水线继续——真正的浏览器内 Human-in-the-Loop。
-- **评估报告页（M4）**：顶部切到「评估报告」，图表化展示完成率、QA 通过率、SLA 达成率、逐工单成本与明细表（数据来自评估 harness 的批量运行）。
-
-  <br />
 
 
 ## MCP 工具接入
@@ -261,6 +241,43 @@ python -m facilitymind.web --port 8000
 
 > 场景扩展（能耗优化 / 预防性保养）可作为后续规划，当前已打通"设备报修"单一场景与 MCP 接入地基。
 
+## 经验记忆层
+
+Agent 不止"会推理"，还能**从每一次处置中积累经验**——结案时把工单结果写回记忆，下次遇到类似故障时自动检索历史经验佐证决策，越跑越准。
+
+**三层数据模型**：
+
+| 层             | 类型          | 内容                                    | 衰减 |
+| -------------- | ------------- | --------------------------------------- | ---- |
+| 事件记忆        | episodic      | 每单工单的根因/处置/成本/质检结果          | 是   |
+| 资产·知识记忆   | semantic      | 每台设备的维修档案（优选供应商/均成本/均耗时） | 否   |
+| 沉淀知识        | semantic      | 经 QA 校验有效的根因→处置，跨楼宇可复用     | 否   |
+
+**分层检索（跨楼宇复用）**：诊断时按相关度分层召回历史经验——同楼宇同资产（权重最高）→ 同资产跨楼宇 → 同故障类型跨楼宇；再叠乘时间衰减 `recency = exp(-age / 180天)`，并对"QA 有效"的处置加权。零向量库依赖、完全离线、可解释。
+
+**自学习闭环**：
+
+```
+Report 结案 ──写回──> 事件记忆 + 资产档案
+                          │
+   沉淀（consolidate）──── └─> 经 QA 有效的事件 → 固化为长期知识（不衰减）
+   归档（archive）──────── └─> 超 365 天的事件 → 转入归档表（保持活跃集聚焦近期）
+                          │
+Diagnose / Dispatch <──读取── 资产档案 + 相似历史 + 沉淀知识
+```
+
+- **Diagnose**：诊断结论带「历史佐证」与「沉淀知识」参考，置信度自动加权。
+- **Dispatch**：复用资产档案里的优选供应商与历史成本，派单 rationale 标注「参考资产历史档案」。
+
+Dashboard 顶部「记忆层」Tab 可查看记忆库统计、近期事件记忆、沉淀知识，并一键执行沉淀 + 归档维护；结案面板展示「本次写入记忆」徽章。
+
+```bash
+# 命令行维护记忆库（沉淀 + 归档）
+python scripts/memory_maintenance.py              # 查看统计
+python scripts/memory_maintenance.py --run        # 执行沉淀 + 归档
+python scripts/memory_maintenance.py --run --retention 180   # 自定义保留期
+```
+
 ## Project Layout
 
 ```
@@ -275,6 +292,8 @@ facilitymind/
 │   ├── cli.py          # 命令行入口
 │   ├── eval.py         # 评估 harness
 │   ├── compare.py      # 规则库 vs LLM 对比工具
+│   ├── memory/         # 经验记忆层（SQLite + 分层检索 + 衰减沉淀归档）
+│   ├── mcp/            # MCP 工具接入（MCPHub + providers + servers）
 │   ├── web/            # Web Dashboard
 │   │   ├── server.py   # SSE 实时流 + 网页 HITL + 评估接口
 │   │   ├── __main__.py # uvicorn 启动入口
@@ -293,8 +312,9 @@ facilitymind/
 - [x] Phase 3: 评估 harness（任务完成率 / QA 通过率 / SLA 达成率 / 成本 / token · 一键 Markdown+JSON 报告）
 - [x] Phase 4: Web Dashboard&#x20;
 - [x] Phase 5: 多模型协作
-- [x] Phase 5.5: MCP 工具接入
-- [ ] Phase 6: 多场景扩展（能耗优化、预防性保养）、CMMS / ERP / IM server、社区运营与双语文档
+- [x] Phase 6 MCP 工具接入
+- [x] Phase 7: 经验记忆层（SQLite 持久化 + 分层跨楼宇检索 + 时间衰减 + 沉淀归档 + 自学习闭环 + Dashboard 记忆面板）
+- [ ] Phase 8: 多场景扩展（能耗优化、预防性保养）、对接CMMS / ERP / IM server
 
 ## License
 
