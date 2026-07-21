@@ -33,6 +33,7 @@
 | 📚 内置知识库 | 8 类常见设施故障的处理经验 + 每类 QA 检查清单，离线可用 |
 | 🔁 历史感知 | 识别同一位置重复故障并自动升级处置 |
 | 🆚 规则 vs LLM 对比 | `--compare` 并排展示规则库与 DeepSeek 的结论差异，验证模型是否真起作用 |
+| 🖥️ Web Dashboard | 打开浏览器即可看 6-Agent 流水线实时点亮，并在网页内做人工确认、看评估图表 |
 | 📊 结构化输出 | 每条工单产出根因、处置、成本、SLA、派单、质检、报告全链路 |
 
 ## Quick Start
@@ -156,6 +157,31 @@ python -m facilitymind.eval --all --quiet
 - 平均步骤数：6.0
 ```
 
+## Web Dashboard
+
+把"接报修 → 诊断 → 派单 → 人工确认 → 质检 → 报告"的全链路，从命令行搬进浏览器：
+打开页面即可看到 6 个 Agent 节点**实时点亮**、每步产出同步展示；高成本派单会在网页内弹出审批卡片，点「批准 / 驳回」后流程继续；
+还有独立的「评估报告」页，用图表呈现完成率 / QA / SLA / 成本等量化指标。
+
+**技术栈**：FastAPI + 原生 JS + Tailwind（CDN）+ Chart.js，零前端构建、零外部依赖，clone 即用。
+
+```bash
+# 启动 Dashboard（默认 http://127.0.0.1:8000）
+python -m facilitymind.web
+
+# 指定端口
+python -m facilitymind.web --port 9000
+```
+
+打开浏览器后的玩法：
+
+- **流水线页**：左侧选工单 → 点「运行流水线」→ 右侧 6 节点依次亮起，每步结论实时滚动。
+- **人工确认（M3）**：取消勾选「自动批准」，成本超阈值（¥2000）的工单会在网页内暂停并弹出审批卡，批准/驳回后流水线继续——真正的浏览器内 Human-in-the-Loop。
+- **评估报告页（M4）**：顶部切到「评估报告」，图表化展示完成率、QA 通过率、SLA 达成率、逐工单成本与明细表（数据来自评估 harness 的批量运行）。
+
+> 当前为内存态：运行结果存于进程内存，服务重启即清空（未接数据库）。
+> Dashboard 不改动任何 Agent 代码，直接复用编译好的 LangGraph 图，通过 `stream()` 做实时推送、`interrupt()/Command(resume=)` 做网页审批。
+
 ## Architecture
 
 ```mermaid
@@ -192,6 +218,10 @@ facilitymind/
 │   ├── cli.py          # 命令行入口
 │   ├── eval.py         # 评估 harness（批量指标 + 报告）
 │   ├── compare.py      # 规则库 vs LLM 对比工具
+│   ├── web/            # Web Dashboard（FastAPI + 原生 JS）
+│   │   ├── server.py   # SSE 实时流 + 网页 HITL + 评估接口
+│   │   ├── __main__.py # uvicorn 启动入口
+│   │   └── static/index.html  # 流水线可视化 + 审批卡 + 评估页
 │   └── data/tickets.json
 ├── docs/images/        # 截图与文档图片
 ├── requirements.txt
@@ -204,7 +234,11 @@ facilitymind/
 - [x] Phase 1: MVP 可运行（Intake → Diagnose → Dispatch + CLI + 离线模式）
 - [x] Phase 2: Human-in-the-Loop 审批节点、QA Agent、Report Agent（共 6 个 Agent 闭环）
 - [x] Phase 3: 评估 harness（任务完成率 / QA 通过率 / SLA 达成率 / 成本 / token · 一键 Markdown+JSON 报告）
-- [ ] Phase 4 (待续): Web Dashboard（实时 Agent 状态流可视化）
+- [x] Phase 4: Web Dashboard
+  - [x] M1 工单看板 + 流水线骨架
+  - [x] M2 SSE 实时点亮 6 节点流水线
+  - [x] M3 网页内 Human-in-the-Loop 审批（取消自动批准 → 触发 interrupt → 网页批准/驳回 → 续跑）
+  - [x] M4 评估报告页（Chart.js 图表化完成率 / QA / SLA / 成本 + 明细表）
 - [ ] Phase 5: MCP 工具接入（CMMS / IoT / ERP / IM）、多场景扩展（能耗优化、预防性保养）、社区运营
 
 ## License

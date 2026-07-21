@@ -1,0 +1,218 @@
+"""FastAPI 服务层：把 FacilityMind 引擎暴露成 Web Dashboard 后端。
+
+设计要点：
+- 不重写任何 Agent：直接复用编译好的 LangGraph 图（graph.app）；
+- 实时流水线：engine.stream(stream_mode="updates") 逐节点产出，经 SSE 推给前端点亮；
+- M3 网页人工确认：auto=0 时 Approval 触发 interrupt，后端以 SSE 推送 interrupt 事件并阻塞
+  等待 /api/approve 的网页决策，再用 Command(resume=...) 续跑（真正的浏览器内 HITL）；
+- M4 评估报告：/api/eval 复用 eval.py 的 run_one/aggregate，把量化指标交给前端画图；
+- 存储：用进程内内存（RUNS），重启即丢；后续可换 SqliteSaver 持久化。
+"""
+
+import json
+import os
+import threading
+import time
+from typing import Iterator
+
+from fastapi import FastAPI
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
+from langgraph.types import Command
+from pydantic import BaseModel
+
+from ..dataio import load_tickets
+from ..eval import aggregate, run_one
+from ..graph import app as engine
+
+STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
+
+# 节点中文标签，与流水线顺序一致
+NODE_ORDER = ["intake", "diagnose", "dispatch", "approval", "qa", "report"]
+NODE_LABELS = {
+    "intake": "受理",
+    "diagnose": "诊断",
+    "dispatch": "派单",
+    "approval": "人工确认",
+    "qa": "质检",
+    "report": "报告",
+}
+# 故障类型中文名
+TYPE_CN = {
+    "elevator": "电梯",
+    "hvac": "暖通空调",
+    "leak": "漏水",
+    "lighting": "照明",
+    "fire": "消防",
+    "access": "门禁道闸",
+    "cleaning": "保洁",
+    "greening": "绿化",
+}
+
+# 进程内内存存储：thread_id -> 最终归并状态（去掉 messages）
+RUNS: dict[str, dict] = {}
+
+# M3 网页人工确认所需的等待队列：ticket_id -> threading.Event
+PENDING: dict[str, threading.Event] = {}
+# ticket_id -> 决策字典（由 /api/approve 写入）
+DECISIONS: dict[str, dict] = {}
+# 等待决策的超时（秒）：超时视为流程终止
+APPROVE_TIMEOUT = 300
+
+api = FastAPI(title="FacilityMind Dashboard", version="0.2.0")
+
+
+def _sse(event: str, data: dict) -> str:
+    """构造一条 SSE 消息。"""
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+def _clean(state: dict) -> dict:
+    """去掉不便 JSON 序列化 / 前端用不到的字段（messages 内含对象）。"""
+    return {k: v for k, v in (state or {}).items() if k != "messages"}
+
+
+def _tickets_index() -> dict[str, dict]:
+    return {t["id"]: t for t in load_tickets()}
+
+
+def _wait_decision(ticket_id: str) -> dict | None:
+    """阻塞等待网页端对工单的人工决策；超时返回 None（调用方据此终止流程）。"""
+    ev = threading.Event()
+    PENDING[ticket_id] = ev
+    try:
+        if not ev.wait(APPROVE_TIMEOUT):
+            return None
+        return DECISIONS.pop(ticket_id, {"approved": False, "note": "超时默认驳回", "approver": "system"})
+    finally:
+        PENDING.pop(ticket_id, None)
+
+
+@api.get("/api/tickets")
+def api_tickets():
+    """工单看板数据：原始工单 + 类型中文名 + 是否已有运行结果。"""
+    out = []
+    for t in load_tickets():
+        item = dict(t)
+        item["type_cn"] = TYPE_CN.get(t.get("type"), t.get("type"))
+        item["has_result"] = t["id"] in RUNS
+        out.append(item)
+    return out
+
+
+@api.get("/api/result/{ticket_id}")
+def api_result(ticket_id: str):
+    """返回内存中某工单最近一次运行的完整结果。"""
+    if ticket_id not in RUNS:
+        return JSONResponse({"error": "尚无运行结果"}, status_code=404)
+    return RUNS[ticket_id]
+
+
+class ApprovalDecision(BaseModel):
+    ticket_id: str
+    approved: bool
+    note: str = ""
+
+
+@api.post("/api/approve")
+def api_approve(decision: ApprovalDecision):
+    """网页端对处于 interrupt 状态的工单做人工决策；唤醒阻塞中的流水线。"""
+    if decision.ticket_id not in PENDING:
+        return JSONResponse(
+            {"error": "当前没有待审批的工单，或审批已超时"}, status_code=400
+        )
+    DECISIONS[decision.ticket_id] = {
+        "approved": decision.approved,
+        "note": decision.note,
+        "approver": "网页审批人",
+    }
+    PENDING[decision.ticket_id].set()
+    return {"ok": True}
+
+
+@api.get("/api/eval")
+def api_eval():
+    """M4 评估报告接口：批量跑内置工单，返回聚合指标 + 逐工单明细。"""
+    tickets = load_tickets()
+    records = [run_one(t) for t in tickets]
+    metrics = aggregate(records)
+    return {"metrics": metrics, "records": records}
+
+
+def _run_stream(ticket: dict, auto_approve: bool, pace: float) -> Iterator[str]:
+    """逐节点运行流水线并以 SSE 事件产出；auto_approve=False 时支持 M3 网页人工确认。"""
+    config = {"configurable": {"thread_id": ticket["id"]}}
+    initial = {"ticket": ticket, "auto_approve": auto_approve}
+
+    yield _sse("start", {"ticket_id": ticket["id"], "order": NODE_ORDER})
+
+    try:
+        # 第一阶段：跑到第一个中断点（若有）
+        for chunk in engine.stream(initial, config, stream_mode="updates"):
+            for node, payload in chunk.items():
+                if node == "__interrupt__":
+                    intr = payload[0]
+                    value = getattr(intr, "value", {})
+                    yield _sse("interrupt", {"ticket_id": ticket["id"], "value": value})
+
+                    decision = _wait_decision(ticket["id"])
+                    if decision is None:
+                        yield _sse("error", {"message": "人工确认超时，流程已终止"})
+                        return
+
+                    # 第二阶段：恢复执行（approval → qa → report）
+                    for chunk2 in engine.stream(
+                        Command(resume=decision), config, stream_mode="updates"
+                    ):
+                        for node2, payload2 in chunk2.items():
+                            if node2 == "__interrupt__":
+                                continue
+                            data = _clean(payload2)
+                            yield _sse(
+                                "node",
+                                {"node": node2, "label": NODE_LABELS.get(node2, node2), "data": data},
+                            )
+                            if pace > 0:
+                                time.sleep(pace)
+                else:
+                    data = _clean(payload)
+                    yield _sse(
+                        "node",
+                        {"node": node, "label": NODE_LABELS.get(node, node), "data": data},
+                    )
+                    if pace > 0:
+                        time.sleep(pace)
+
+        # 取最终归并状态存内存，供看板复看
+        final_state = _clean(engine.get_state(config).values)
+        RUNS[ticket["id"]] = final_state
+        yield _sse("done", {"ticket_id": ticket["id"], "result": final_state})
+    except Exception as exc:  # 兜底：任何异常都通过 SSE 反馈前端，避免连接静默中断
+        yield _sse("error", {"message": f"{type(exc).__name__}: {exc}"})
+
+
+@api.get("/api/stream")
+def api_stream(id: str, auto: int = 1, pace: float = 0.5):
+    """SSE 端点：实时推送某工单的流水线执行过程。
+
+    auto=1（默认）：成本超阈值也自动放行，跑通完整流水线（M1/M2 行为）。
+    auto=0：成本超阈值时触发 interrupt，需网页端 /api/approve 决策后继续（M3 行为）。
+    """
+    tickets = _tickets_index()
+    if id not in tickets:
+        return JSONResponse({"error": f"未找到工单 {id}"}, status_code=404)
+    headers = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+    return StreamingResponse(
+        _run_stream(tickets[id], bool(auto), max(0.0, pace)),
+        media_type="text/event-stream",
+        headers=headers,
+    )
+
+
+@api.get("/")
+def index():
+    return FileResponse(os.path.join(STATIC_DIR, "index.html"))
+
+
+# 静态资源挂载在最后，避免覆盖上面的 API 路由
+api.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")

@@ -42,7 +42,8 @@ def run_one(raw_ticket: dict) -> dict:
     """跑单条工单并抽取评估指标。"""
     llm.reset()
     initial = {"ticket": raw_ticket, "auto_approve": True}
-    result = app.invoke(initial, {"configurable": {"thread_id": raw_ticket["id"]}})
+    # 用 eval- 前缀 thread_id，避免与 Dashboard 看板的流式 thread_id 互相污染 MemorySaver 状态
+    result = app.invoke(initial, {"configurable": {"thread_id": "eval-" + raw_ticket["id"]}})
 
     diag = result.get("diagnosis", {})
     plan = result.get("dispatch_plan", {})
