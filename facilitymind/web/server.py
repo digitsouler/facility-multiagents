@@ -26,6 +26,7 @@ from ..eval import aggregate, run_one
 from ..graph import app as engine
 from ..llm import calls_breakdown, list_models, usage_breakdown
 from ..memory import get_store
+from ..tracer import end_trace, start_trace
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 
@@ -194,6 +195,8 @@ def _run_stream(ticket: dict, auto_approve: bool, pace: float, ensemble: bool = 
     _before_call = calls_breakdown()
     # 记忆库快照：结束后做差得出"本单写入"的记忆条数（事件/资产/沉淀知识）。
     _before_mem = get_store().stats()
+    # 结构化 trace：一次运行 = 一条 trace，各 Agent/LLM/记忆/MCP 自动埋点。
+    start_trace(ticket["id"])
 
     yield _sse("start", {"ticket_id": ticket["id"], "order": NODE_ORDER})
 
@@ -237,6 +240,9 @@ def _run_stream(ticket: dict, auto_approve: bool, pace: float, ensemble: bool = 
         # 取最终归并状态存内存，供看板复看
         final_state = _clean(engine.get_state(config).values)
         RUNS[ticket["id"]] = final_state
+        # 结束 trace：计算总耗时、落 JSONL、返回结构化 dict
+        _trace = end_trace()
+        _trace_dict = _trace.to_dict() if _trace else None
 
         # 计算本单各模型 token / 调用消耗（做差）
         _after_tok = usage_breakdown()
@@ -251,6 +257,7 @@ def _run_stream(ticket: dict, auto_approve: bool, pace: float, ensemble: bool = 
             "model_tokens": model_tokens,
             "model_calls": model_calls,
             "llm_calls": calls,
+            "trace": _trace_dict,
         }
         # 记忆写入差量（本单新沉淀的事件记忆/资产档案/沉淀知识）
         _after_mem = get_store().stats()
@@ -268,9 +275,11 @@ def _run_stream(ticket: dict, auto_approve: bool, pace: float, ensemble: bool = 
                 "model_tokens": model_tokens,
                 "llm_calls": calls,
                 "memory_written": memory_written,
+                "trace": _trace_dict,
             },
         )
     except Exception as exc:  # 兜底：任何异常都通过 SSE 反馈前端，避免连接静默中断
+        end_trace()  # 清理 trace 上下文，避免 contextvar 泄漏
         yield _sse("error", {"message": f"{type(exc).__name__}: {exc}"})
 
 

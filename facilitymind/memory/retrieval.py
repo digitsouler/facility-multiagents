@@ -13,6 +13,7 @@ from datetime import datetime
 from math import exp
 
 from ..mcp import providers
+from ..tracer import span
 from .store import get_store
 
 TAU_DAYS = 180.0
@@ -30,37 +31,42 @@ def retrieve_similar(ticket: dict, limit: int = 5, tau_days: float = TAU_DAYS) -
     store = get_store()
     if store.disabled:
         return []
-    asset_id = _asset_of(ticket)
-    building = ticket.get("location_hint") or ""
-    rows = store.get_incidents(ticket_type=ticket["type"], limit=200)
-    now = datetime.now()
-    scored = []
-    for r in rows:
-        if r.get("ticket_id") == ticket.get("id"):
-            continue
-        same_asset = bool(asset_id) and r.get("asset_id") == asset_id
-        same_building = bool(building) and r.get("building") == building
-        if same_asset and same_building:
-            base = 3.0
-        elif same_asset:
-            base = 2.0
-        elif r.get("asset_type") == ticket["type"]:
-            base = 1.0
-        else:
-            base = 0.3
-        try:
-            age_days = (now - datetime.fromisoformat(r["created_at"])).days
-        except Exception:
-            age_days = 0
-        recency = exp(-age_days / tau_days)
-        score = base * recency
-        if r.get("outcome_valid") == 1:
-            score *= 1.2
-        elif r.get("outcome_valid") == 0:
-            score *= 0.6
-        scored.append((score, r))
-    scored.sort(key=lambda x: -x[0])
-    return [r for _, r in scored[:limit]]
+    with span("memory.retrieve_similar", "memory", ticket=ticket.get("id", "")) as s:
+        asset_id = _asset_of(ticket)
+        building = ticket.get("location_hint") or ""
+        rows = store.get_incidents(ticket_type=ticket["type"], limit=200)
+        now = datetime.now()
+        scored = []
+        for r in rows:
+            if r.get("ticket_id") == ticket.get("id"):
+                continue
+            same_asset = bool(asset_id) and r.get("asset_id") == asset_id
+            same_building = bool(building) and r.get("building") == building
+            if same_asset and same_building:
+                base = 3.0
+            elif same_asset:
+                base = 2.0
+            elif r.get("asset_type") == ticket["type"]:
+                base = 1.0
+            else:
+                base = 0.3
+            try:
+                age_days = (now - datetime.fromisoformat(r["created_at"])).days
+            except Exception:
+                age_days = 0
+            recency = exp(-age_days / tau_days)
+            score = base * recency
+            if r.get("outcome_valid") == 1:
+                score *= 1.2
+            elif r.get("outcome_valid") == 0:
+                score *= 0.6
+            scored.append((score, r))
+        scored.sort(key=lambda x: -x[0])
+        result = [r for _, r in scored[:limit]]
+        if s:
+            top = round(scored[0][0], 2) if scored else 0
+            s.finish(output_brief=f"{len(result)} 条历史", hits=len(result), top_score=top)
+        return result
 
 
 def get_asset_context(ticket: dict) -> dict | None:

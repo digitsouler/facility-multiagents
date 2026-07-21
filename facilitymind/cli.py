@@ -23,6 +23,7 @@ from langgraph.types import Command
 
 from .dataio import load_tickets
 from .graph import app
+from .tracer import end_trace, render_tree, start_trace
 
 
 def _print_result(ticket_id: str, result: dict) -> None:
@@ -56,6 +57,7 @@ def _print_result(ticket_id: str, result: dict) -> None:
 
 def run_one(raw_ticket: dict, config: dict, auto_approve: bool, ensemble: bool = False) -> dict:
     """运行单条工单；如需人工确认则处理 interrupt 并恢复。"""
+    start_trace(raw_ticket.get("id", ""))
     initial = {"ticket": raw_ticket, "auto_approve": auto_approve, "ensemble": ensemble}
     result = app.invoke(initial, config)
 
@@ -74,6 +76,10 @@ def run_one(raw_ticket: dict, config: dict, auto_approve: bool, ensemble: bool =
             decision = {"approved": True, "note": "非交互环境自动批准", "approver": "system(auto)"}
         result = app.invoke(Command(resume=decision), config)
 
+    trace = end_trace()
+    if trace is not None:
+        print(render_tree(trace))
+        print()
     return result
 
 

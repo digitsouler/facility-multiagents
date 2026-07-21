@@ -14,6 +14,8 @@ from typing import Optional
 
 from openai import OpenAI
 
+from .tracer import span
+
 
 def extract_json(text: str) -> Optional[dict]:
     """从模型输出里尽量抠出 JSON 对象。
@@ -77,25 +79,32 @@ class LLMClient:
         """
         if not self._client:
             return ""
-        try:
-            resp = self._client.chat.completions.create(
-                model=self.model,
-                temperature=temperature,
-                messages=[
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": user},
-                ],
-            )
-        except Exception as exc:  # noqa: BLE001 - 在线模式需对外部服务容错
-            print(f"[LLM:{self.name}] 调用失败，回退规则库：{type(exc).__name__}: {exc}")
-            return ""
-        usage = getattr(resp, "usage", None)
-        if usage is not None and getattr(usage, "total_tokens", None) is not None:
-            self.total_tokens += int(usage.total_tokens)
-        else:
-            self.total_tokens += max(1, len(system) // 2 + len(user) // 2)
-        self.call_count += 1
-        return resp.choices[0].message.content or ""
+        _tok_before = self.total_tokens
+        with span(f"LLM:{self.name}", "llm", model=self.model) as s:
+            try:
+                resp = self._client.chat.completions.create(
+                    model=self.model,
+                    temperature=temperature,
+                    messages=[
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": user},
+                    ],
+                )
+            except Exception as exc:  # noqa: BLE001 - 在线模式需对外部服务容错
+                print(f"[LLM:{self.name}] 调用失败，回退规则库：{type(exc).__name__}: {exc}")
+                if s:
+                    s.finish(status="error", error=f"{type(exc).__name__}")
+                return ""
+            usage = getattr(resp, "usage", None)
+            if usage is not None and getattr(usage, "total_tokens", None) is not None:
+                self.total_tokens += int(usage.total_tokens)
+            else:
+                self.total_tokens += max(1, len(system) // 2 + len(user) // 2)
+            self.call_count += 1
+            _tokens = self.total_tokens - _tok_before
+            if s:
+                s.finish(output_brief=f"{_tokens} tokens", tokens=_tokens)
+            return resp.choices[0].message.content or ""
 
 
 # --------------------------------------------------------------------------- #

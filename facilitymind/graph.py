@@ -19,6 +19,7 @@ from .agents import (
     report_agent,
 )
 from .state import FacilityState
+from .tracer import traced
 
 
 def _route_after_approval(state: FacilityState) -> str:
@@ -29,12 +30,13 @@ def _route_after_approval(state: FacilityState) -> str:
 
 def build_graph():
     graph = StateGraph(FacilityState)
-    graph.add_node("intake", intake_agent)
-    graph.add_node("diagnose", diagnose_agent)
-    graph.add_node("dispatch", dispatch_agent)
-    graph.add_node("approval", approval_agent)
-    graph.add_node("qa", qa_agent)
-    graph.add_node("report", report_agent)
+    # 用 traced 装饰器包装各节点：有活跃 trace 时自动记录 Agent 进出+耗时+子调用。
+    graph.add_node("intake", traced("Intake")(intake_agent))
+    graph.add_node("diagnose", traced("Diagnose")(diagnose_agent))
+    graph.add_node("dispatch", traced("Dispatch")(dispatch_agent))
+    graph.add_node("approval", traced("Approval", "system")(approval_agent))
+    graph.add_node("qa", traced("QA", "qa")(qa_agent))
+    graph.add_node("report", traced("Report")(report_agent))
 
     graph.set_entry_point("intake")
     graph.add_edge("intake", "diagnose")
