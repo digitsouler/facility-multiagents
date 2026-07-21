@@ -21,20 +21,21 @@
 
 ## Features
 
-| Feature | Description |
-|---------|-------------|
-| 🧠 多 Agent 协作 | Intake / Diagnose / Dispatch / Approval / QA / Report 六 Agent 流水线闭环 |
-| 🛡️ 可控编排 | LangGraph 状态机，节点可审计、可重放、可扩展 |
-| ✋ Human-in-the-Loop | 高价值派单自动暂停，经 interrupt() 等待人工确认，可批准/驳回 |
-| ✅ QA 质检 | 模拟现场执行并对照检查清单逐项核验，输出通过与综合评分 |
-| 📝 复盘报告 | Report Agent 自动生成结案摘要与可执行的优化建议 |
-| 📈 评估 Harness | 一键批量跑工单，量化任务完成率 / QA 通过率 / SLA 达成率 / 成本 / token，输出 Markdown + JSON |
-| 🔌 LLM 可插拔 | 有 Key 走大模型，无 Key 走规则库，二者无缝切换 |
-| 📚 内置知识库 | 8 类常见设施故障的处理经验 + 每类 QA 检查清单，离线可用 |
-| 🔁 历史感知 | 识别同一位置重复故障并自动升级处置 |
-| 🆚 规则 vs LLM 对比 | `--compare` 并排展示规则库与 DeepSeek 的结论差异，验证模型是否真起作用 |
-| 🖥️ Web Dashboard | 打开浏览器即可看 6-Agent 流水线实时点亮，并在网页内做人工确认、看评估图表 |
-| 📊 结构化输出 | 每条工单产出根因、处置、成本、SLA、派单、质检、报告全链路 |
+| Feature             | Description                                                         |
+| ------------------- | ------------------------------------------------------------------- |
+| 🧠 多 Agent 协作       | Intake / Diagnose / Dispatch / Approval / QA / Report 六 Agent 流水线闭环 |
+| 🛡️ 可控编排            | LangGraph 状态机，节点可审计、可重放、可扩展                                         |
+| 🤝 多模型协作            | Model Registry 支持多模型配置，可按 Agent 路由；Diagnose 阶段可 Ensemble 多模型集成并合成结论 |
+| ✋ Human-in-the-Loop | 高价值派单自动暂停，经 interrupt() 等待人工确认，可批准/驳回                               |
+| ✅ QA 质检             | 模拟现场执行并对照检查清单逐项核验，输出通过与综合评分                                         |
+| 📝 复盘报告             | Report Agent 自动生成结案摘要与可执行的优化建议                                      |
+| 📈 评估 Harness       | 一键批量跑工单，量化任务完成率 / QA 通过率 / SLA 达成率 / 成本 / token，输出 Markdown + JSON  |
+| 🔌 LLM 可插拔          | 有 Key 走大模型，无 Key 走规则库，二者无缝切换；支持 DeepSeek / Qwen / 智谱 / Ollama 多家模型  |
+| 📚 内置知识库            | 8 类常见设施故障的处理经验 + 每类 QA 检查清单，离线可用                                    |
+| 🔁 历史感知             | 识别同一位置重复故障并自动升级处置                                                   |
+| 🆚 规则 vs LLM 对比     | `--compare` 并排展示规则库与 DeepSeek 的结论差异，验证模型是否真起作用                      |
+| 🖥️ Web Dashboard   | 打开浏览器即可看 6-Agent 流水线实时点亮，并在网页内做人工确认、看评估图表                           |
+| 📊 结构化输出            | 每条工单产出根因、处置、成本、SLA、派单、质检、报告全链路                                      |
 
 ## Quick Start
 
@@ -60,17 +61,31 @@ docker compose up --build
 
 ### 接入真实大模型（可选）
 
-复制 `.env.example` 为 `.env`，填入兼容 OpenAI 的接口：
+FacilityMind 支持**多模型共存与协作**，不是只绑一个 provider：
+
+- 复制 `.env.example` 为 `.env`，填入兼容 OpenAI 的接口；
+- 再在 `facilitymind/models.json` 里声明各家模型（已内置 DeepSeek / 通义千问 Qwen / 智谱 GLM / Ollama 本地）。
 
 ```bash
 cp .env.example .env
-# 编辑 .env：设置 LLM_API_KEY / LLM_BASE_URL / LLM_MODEL
+# 编辑 .env：可填一个或多个模型的 API Key
+# LLM_API_KEY=sk-xxx          # DeepSeek（默认）
+# QWEN_API_KEY=sk-xxx         # 通义千问
+# ZHIPU_API_KEY=xxx           # 智谱 GLM
+# OLLAMA_API_KEY=ollama       # 本地 Ollama（占位即可，实际鉴权取决于本地配置）
 ```
 
-不设则自动进入离线规则模式。
+不设则自动进入离线规则模式；填了任意 Key 后，对应模型即自动启用，且任意 API 错误都会安全回退规则库。`models.json` 里可进一步配置：
+
+| 配置项             | 作用                                                             |
+| --------------- | -------------------------------------------------------------- |
+| `default`       | 默认模型（fallback）                                                 |
+| `agent_routing` | 按 Agent 指定模型，如 Intake 用 Qwen、Diagnose 用 DeepSeek、Dispatch 用 智谱 |
+| `ensemble`      | Diagnose 阶段同时扇出多个模型，由 Synthesizer 整合各家结论                       |
+| `models`        | 每家模型的 base\_url、model 名、api\_key\_env、中文 label                 |
 
 > 已内置 `python-dotenv`：`.env` 会在程序启动时自动读取，无需手动 `export`。
-> 只要 `LLM_API_KEY` 非空，CLI / eval 即自动切入在线 LLM 模式，且任意 API 错误都会安全回退规则库。
+> 只要对应 `*_API_KEY` 非空，CLI / eval / Dashboard 即自动启用对应模型。
 
 ## Usage
 
@@ -90,6 +105,15 @@ python -m facilitymind.cli --all
 
 # 对比「规则库」与「DeepSeek(LLM)」对同一工单的结论差异（验证模型是否真起作用）
 python -m facilitymind.cli --id T-001 --compare
+
+# 使用多模型集成（Diagnose 阶段扇出多个模型并合成结论）
+python -m facilitymind.cli --id T-001 --ensemble
+
+# 同时开启多模型集成并跳过人工确认（批量 / CI 用）
+python -m facilitymind.cli --id T-001 --ensemble --auto
+
+# 横向对比多个模型在相同诊断任务上的输出差异（--compare-models 会调用 models.json 中已启用的模型）
+python -m facilitymind.cli --id T-001 --compare-models
 ```
 
 示例输出（电梯困人，触发人工确认节点）：
@@ -157,11 +181,44 @@ python -m facilitymind.eval --all --quiet
 - 平均步骤数：6.0
 ```
 
+## 多模型协作
+
+FacilityMind 的 LLM 层不是单例，而是一个**可扩展的 Model Registry**。
+
+```
+┌─────────────┐   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐
+│  DeepSeek   │   │  通义千问   │   │  智谱 GLM   │   │   Ollama    │
+│   (默认)     │   │   (可选)    │   │   (可选)    │   │   (本地)    │
+└──────┬──────┘   └──────┬──────┘   └──────┬──────┘   └──────┬──────┘
+       │                  │                 │                 │
+       └──────────────────┴─────────────────┴─────────────────┘
+                          │
+                   Model Registry
+                          │
+       ┌──────────────────┼──────────────────┐
+       │                  │                  │
+  ┌────┴────┐        ┌────┴────┐       ┌────┴────┐
+  │ 按 Agent │        │  Ensemble  │      │  对比/评估  │
+  │  路由    │        │ 多模型集成  │      │  按模型拆 Token │
+  └─────────┘        └─────────┘      └─────────┘
+```
+
+**两种协作模式：**
+
+1. **按 Agent 路由**：通过 `models.json` 的 `agent_routing` 给不同 Agent 分配擅长模型。例如让响应快的模型做 Intake、推理强的模型做 Diagnose、成本低的模型做 Report。
+2. **Ensemble 多模型集成**：在 Diagnose 阶段同时把同一工单丢给多个模型，各自输出诊断结论，再由 Synthesizer 整合出最终根因、置信度和处置建议。适合复杂/高价值故障，可降低单一模型幻觉带来的风险。
+
+**按模型计量成本**：每条流水线、每批评估，都会按模型拆分 Token 消耗与调用次数，方便横向对比模型性价比。
+
+![Web Dashboard 多模型 Token 消耗](docs/images/dashboard-multi-model-tokens.png)
+
+> 上图：Dashboard 运行 T-001 时，Diagnose 阶段启用了 DeepSeek + 通义千问 + 智谱三家 Ensemble，结案面板直接展示每家模型消耗的 Token 数。
+
 ## Web Dashboard
 
 把"接报修 → 诊断 → 派单 → 人工确认 → 质检 → 报告"的全链路，从命令行搬进浏览器：
 打开页面即可看到 6 个 Agent 节点**实时点亮**、每步产出同步展示；高成本派单会在网页内弹出审批卡片，点「批准 / 驳回」后流程继续；
-还有独立的「评估报告」页，用图表呈现完成率 / QA / SLA / 成本等量化指标。
+还有独立的「评估报告」页，用图表呈现完成率 / QA / SLA / 成本等量化指标；勾选「多模型集成 Ensemble」后，Diagnose 阶段会扇出多个模型，并在结案结果中展示每个模型的 Token 消耗。
 
 **技术栈**：FastAPI + 原生 JS + Tailwind（CDN）+ Chart.js，零前端构建、零外部依赖，clone 即用。
 
@@ -179,10 +236,7 @@ python -m facilitymind.web --port 9000
 - **人工确认（M3）**：取消勾选「自动批准」，成本超阈值（¥2000）的工单会在网页内暂停并弹出审批卡，批准/驳回后流水线继续——真正的浏览器内 Human-in-the-Loop。
 - **评估报告页（M4）**：顶部切到「评估报告」，图表化展示完成率、QA 通过率、SLA 达成率、逐工单成本与明细表（数据来自评估 harness 的批量运行）。
 
-> 当前为内存态：运行结果存于进程内存，服务重启即清空（未接数据库）。
-> Dashboard 不改动任何 Agent 代码，直接复用编译好的 LangGraph 图，通过 `stream()` 做实时推送、`interrupt()/Command(resume=)` 做网页审批。
-
-## Architecture
+  <br />
 
 ```mermaid
 graph LR
@@ -195,14 +249,14 @@ graph LR
     F --> G[(结案)]
 ```
 
-| Agent | 职责 |
-|-------|------|
-| **Intake Agent** | 把报修文本结构化为工单（类型 / 紧急度 / 位置） |
-| **Diagnose Agent** | 结合知识库与历史，给出根因、处置建议、成本、SLA，识别重复故障 |
-| **Dispatch Agent** | 按技能匹配资源池，输出最优派单方案 |
+| Agent              | 职责                                                  |
+| ------------------ | --------------------------------------------------- |
+| **Intake Agent**   | 把报修文本结构化为工单（类型 / 紧急度 / 位置）                          |
+| **Diagnose Agent** | 结合知识库与历史，给出根因、处置建议、成本、SLA，识别重复故障                    |
+| **Dispatch Agent** | 按技能匹配资源池，输出最优派单方案                                   |
 | **Approval Agent** | Human-in-the-Loop 节点：成本超阈值时经 `interrupt()` 暂停等待人工确认 |
-| **QA Agent** | 模拟现场执行，对照检查清单逐项核验，输出通过与综合评分 |
-| **Report Agent** | 汇总全线结论，生成结案摘要与可执行的优化建议 |
+| **QA Agent**       | 模拟现场执行，对照检查清单逐项核验，输出通过与综合评分                         |
+| **Report Agent**   | 汇总全线结论，生成结案摘要与可执行的优化建议                              |
 
 ## Project Layout
 
@@ -234,12 +288,9 @@ facilitymind/
 - [x] Phase 1: MVP 可运行（Intake → Diagnose → Dispatch + CLI + 离线模式）
 - [x] Phase 2: Human-in-the-Loop 审批节点、QA Agent、Report Agent（共 6 个 Agent 闭环）
 - [x] Phase 3: 评估 harness（任务完成率 / QA 通过率 / SLA 达成率 / 成本 / token · 一键 Markdown+JSON 报告）
-- [x] Phase 4: Web Dashboard
-  - [x] M1 工单看板 + 流水线骨架
-  - [x] M2 SSE 实时点亮 6 节点流水线
-  - [x] M3 网页内 Human-in-the-Loop 审批（取消自动批准 → 触发 interrupt → 网页批准/驳回 → 续跑）
-  - [x] M4 评估报告页（Chart.js 图表化完成率 / QA / SLA / 成本 + 明细表）
-- [ ] Phase 5: MCP 工具接入（CMMS / IoT / ERP / IM）、多场景扩展（能耗优化、预防性保养）、社区运营
+- [x] Phase 4: Web Dashboard&#x20;
+- [x] Phase 5: 多模型协作（Model Registry · 按 Agent 路由 · Diagnose Ensemble · 按模型拆分 Token 与成本）
+- [ ] Phase 6: MCP 工具接入（CMMS / IoT / ERP / IM）、多场景扩展（能耗优化、预防性保养）、社区运营
 
 ## License
 
