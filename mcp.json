@@ -1,0 +1,10 @@
+{
+  "servers": [
+    {
+      "name": "iot",
+      "transport": "stdio",
+      "module": "facilitymind.mcp.servers.iot",
+      "enabled": true
+    }
+  ]
+}
