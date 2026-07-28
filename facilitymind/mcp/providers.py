@@ -5,8 +5,11 @@
 - 任何异常（server 未起 / 超时 / 解析失败）都返回 None/[]，Agent 据此回退，
   绝不中断流水线。
 """
+import logging
+
 from .hub import get_hub
-from ..tracer import span
+
+log = logging.getLogger("facilitymind.mcp")
 
 # 仅这些故障类型可能存在受监控资产；其余类型无对应传感器
 _IOT_TYPES = {"hvac", "leak", "lighting", "fire"}
@@ -34,29 +37,24 @@ def read_sensor_for_ticket(ticket: dict):
     asset_id = _resolve_asset(ticket)
     if not asset_id:
         return None
-    with span("mcp.iot.read_sensor", "mcp", asset=asset_id) as s:
-        try:
-            hub = get_hub()
-            if not hub.available("iot"):
-                if s:
-                    s.finish(status="skipped", output_brief="iot offline")
-                return None
-            res = hub.call_tool("iot", "read_sensor", {"asset_id": asset_id, "metric": "all"})
-            if isinstance(res, dict) and "error" not in res:
-                # 提取异常指标摘要
-                metrics = res.get("metrics", {})
-                bad = [m for m, v in metrics.items() if isinstance(v, dict) and v.get("status") == "anomaly"]
-                if s:
-                    s.finish(output_brief=f"{len(bad)} 异常指标" if bad else "正常",
-                             anomalies=len(bad))
-                return res
-            if s:
-                s.finish(status="error", output_brief="no data")
+    log.info("[MCP:IoT] 读取传感器 asset=%s", asset_id)
+    try:
+        hub = get_hub()
+        if not hub.available("iot"):
+            log.info("[MCP:IoT] iot 离线，跳过")
             return None
-        except Exception:  # noqa: BLE001
-            if s:
-                s.finish(status="error", output_brief="exception")
-            return None
+        res = hub.call_tool("iot", "read_sensor", {"asset_id": asset_id, "metric": "all"})
+        if isinstance(res, dict) and "error" not in res:
+            # 提取异常指标摘要
+            metrics = res.get("metrics", {})
+            bad = [m for m, v in metrics.items() if isinstance(v, dict) and v.get("status") == "anomaly"]
+            log.info("[MCP:IoT] 读取完成，异常指标 %d 个", len(bad))
+            return res
+        log.warning("[MCP:IoT] 无数据返回")
+        return None
+    except Exception:  # noqa: BLE001
+        log.warning("[MCP:IoT] 读取异常", exc_info=True)
+        return None
 
 
 def read_anomalies():

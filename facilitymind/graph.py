@@ -7,6 +7,9 @@ Phase 2 工作流：Intake → Diagnose → Dispatch → Approval(HITL) → QA �
 编译时挂 MemorySaver 检查点，使 interrupt 可暂停/恢复、状态可重放与审计。
 """
 
+import logging
+import time
+
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 
@@ -19,7 +22,25 @@ from .agents import (
     report_agent,
 )
 from .state import FacilityState
-from .tracer import traced
+
+log = logging.getLogger("facilitymind.graph")
+
+
+def _node(name: str):
+    """节点包装：记录进入/完成与耗时，异常透传并记日志。"""
+    def deco(fn):
+        def wrapper(state):
+            start = time.time()
+            log.info("[%s] ▶ 进入", name)
+            try:
+                res = fn(state)
+            except Exception:
+                log.exception("[%s] ✖ 执行异常", name)
+                raise
+            log.info("[%s] ✔ 完成 用时=%.2fs", name, time.time() - start)
+            return res
+        return wrapper
+    return deco
 
 
 def _route_after_approval(state: FacilityState) -> str:
@@ -30,13 +51,12 @@ def _route_after_approval(state: FacilityState) -> str:
 
 def build_graph():
     graph = StateGraph(FacilityState)
-    # 用 traced 装饰器包装各节点：有活跃 trace 时自动记录 Agent 进出+耗时+子调用。
-    graph.add_node("intake", traced("Intake")(intake_agent))
-    graph.add_node("diagnose", traced("Diagnose")(diagnose_agent))
-    graph.add_node("dispatch", traced("Dispatch")(dispatch_agent))
-    graph.add_node("approval", traced("Approval", "system")(approval_agent))
-    graph.add_node("qa", traced("QA", "qa")(qa_agent))
-    graph.add_node("report", traced("Report")(report_agent))
+    graph.add_node("intake", _node("Intake")(intake_agent))
+    graph.add_node("diagnose", _node("Diagnose")(diagnose_agent))
+    graph.add_node("dispatch", _node("Dispatch")(dispatch_agent))
+    graph.add_node("approval", _node("Approval")(approval_agent))
+    graph.add_node("qa", _node("QA")(qa_agent))
+    graph.add_node("report", _node("Report")(report_agent))
 
     graph.set_entry_point("intake")
     graph.add_edge("intake", "diagnose")

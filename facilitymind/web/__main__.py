@@ -12,6 +12,8 @@ import argparse
 
 import uvicorn
 
+from ..logconf import setup_logging
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="FacilityMind Web Dashboard")
@@ -20,6 +22,7 @@ def main() -> None:
     parser.add_argument("--reload", action="store_true", help="开发模式热重载")
     args = parser.parse_args()
 
+    setup_logging()
     print(f"FacilityMind Dashboard → http://{args.host}:{args.port}")
     uvicorn.run(
         "facilitymind.web.server:api",

@@ -17,13 +17,16 @@
 
 import argparse
 import json
+import logging
 import sys
 
 from langgraph.types import Command
 
 from .dataio import load_tickets
 from .graph import app
-from .tracer import end_trace, render_tree, start_trace
+from .logconf import setup_logging
+
+log = logging.getLogger("facilitymind.cli")
 
 
 def _print_result(ticket_id: str, result: dict) -> None:
@@ -57,7 +60,7 @@ def _print_result(ticket_id: str, result: dict) -> None:
 
 def run_one(raw_ticket: dict, config: dict, auto_approve: bool, ensemble: bool = False) -> dict:
     """运行单条工单；如需人工确认则处理 interrupt 并恢复。"""
-    start_trace(raw_ticket.get("id", ""))
+    log.info("[CLI] 运行工单 %s auto=%s ensemble=%s", raw_ticket.get("id"), auto_approve, ensemble)
     initial = {"ticket": raw_ticket, "auto_approve": auto_approve, "ensemble": ensemble}
     result = app.invoke(initial, config)
 
@@ -65,6 +68,7 @@ def run_one(raw_ticket: dict, config: dict, auto_approve: bool, ensemble: bool =
         interrupts = result["__interrupt__"]
         payload = interrupts[0].value
         print("\n🔔 [HITL] 触发人工确认节点：", payload.get("prompt"))
+        log.info("[CLI] HITL 触发：%s", payload.get("prompt"))
         # 交互终端下提示人工批准/驳回；无法读取输入（CI/脚本环境）则自动批准，避免阻塞。
         try:
             ans = input("   批准该派单？(y/N): ").strip().lower()
@@ -73,13 +77,10 @@ def run_one(raw_ticket: dict, config: dict, auto_approve: bool, ensemble: bool =
             decision = {"approved": approved, "note": note, "approver": "现场主管"}
         except EOFError:
             print("   [非交互环境] 默认自动批准，继续流水线。")
+            log.info("[CLI] 非交互环境，默认自动批准")
             decision = {"approved": True, "note": "非交互环境自动批准", "approver": "system(auto)"}
         result = app.invoke(Command(resume=decision), config)
 
-    trace = end_trace()
-    if trace is not None:
-        print(render_tree(trace))
-        print()
     return result
 
 
@@ -93,6 +94,7 @@ def main() -> None:
     parser.add_argument("--compare-models", action="store_true", help="多模型横向对比（规则库 vs 全部已启用模型）")
     parser.add_argument("--ensemble", action="store_true", help="诊断阶段启用多模型集成（Ensemble）")
     args = parser.parse_args()
+    setup_logging(log_file="logs/pipeline.log")
 
     tickets = load_tickets()
 
