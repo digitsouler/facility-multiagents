@@ -4,14 +4,12 @@
 非自动模式下 interrupt() 等复核人签字，自动模式系统自动签。
 """
 
-import json
 from datetime import datetime
 
 from langgraph.types import interrupt
 
-from ..knowledge import QA_CHECKLISTS
+from ..services import build_qa_checks, write_prevention
 from ..state import FacilityState, QAResult
-from ..tools.registry import verify_photos, check_sla, check_cost, write_prevention
 
 
 def qa_agent(state: FacilityState) -> dict:
@@ -21,34 +19,14 @@ def qa_agent(state: FacilityState) -> dict:
     fb = state.get("feedback", {})
     auto = state.get("auto_approve", False)
 
-    checks: list[dict] = []
-    p_photo = json.loads(verify_photos.invoke({"photos_uploaded": fb.get("photos_uploaded", False)}))["passed"]
-    checks.append({"item": "维修前后影像留痕", "passed": p_photo})
-    checks.append({"item": "作业人员资质核验", "passed": fb.get("cert_verified", False)})
-    for item in QA_CHECKLISTS.get(ticket["type"], []):
-        checks.append({"item": item, "passed": True})
-
-    p_sla = json.loads(check_sla.invoke({
-        "actual_response_min": fb.get("actual_response_min", 0),
-        "sla_hours": diag["sla_hours"],
-    }))["passed"]
-    p_cost = json.loads(check_cost.invoke({
-        "cost": plan["cost"],
-        "estimated_cost": diag["estimated_cost"],
-    }))["passed"]
-    checks.append({"item": f"响应时间≤SLA({diag['sla_hours'] * 60}分钟)", "passed": p_sla})
-    checks.append({"item": f"成本≤预估(¥{diag['estimated_cost'] * 1.1:.0f})", "passed": p_cost})
-
+    checks = build_qa_checks(ticket, diag, plan, fb)
     issues = [c["item"] for c in checks if not c["passed"]]
     passed = len(issues) == 0
     score = round(sum(1 for c in checks if c["passed"]) / len(checks), 2)
 
     prevention_note = ""
     if not passed:
-        prevention_note = json.loads(write_prevention.invoke({
-            "ticket_id": ticket["id"],
-            "issues_json": json.dumps(issues, ensure_ascii=False),
-        }))["prevention_note"]
+        prevention_note = write_prevention(ticket["id"], issues)["prevention_note"]
 
     if auto:
         reviewer = "system"

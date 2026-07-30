@@ -1,15 +1,14 @@
 """Dispatch Agent：资源调度与派单建议。
 
-职责：根据诊断所需技能，用 rank_vendors 工具按"性价比（成本省+质量高+响应快）"排序候选，
+职责：根据诊断所需技能，用 rank_vendors 服务按"性价比（成本省+质量高+响应快）"排序候选，
 挑最划算的维保商；高价值决策（成本超限）的人工确认节点在 Approval 接入。
 """
 
-import json
 import logging
 
 from ..llm import get_agent_client
+from ..services import rank_vendors
 from ..state import Assignment, FacilityState
-from ..tools.registry import rank_vendors
 
 log = logging.getLogger("facilitymind.dispatch")
 
@@ -19,7 +18,7 @@ def dispatch_agent(state: FacilityState) -> dict:
     skill = diag["required_skill"]
     ttype = state["ticket"]["type"]
 
-    ranked = json.loads(rank_vendors.invoke({"fault_type": ttype, "skill": skill}))
+    ranked = rank_vendors(ttype, skill)
     best = ranked[0]
     rationale = (
         f"按性价比排序，{best['name']} 得分最高（成本¥{best['cost']:.0f} / "

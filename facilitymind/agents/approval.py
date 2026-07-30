@@ -8,20 +8,19 @@
 成本未超阈值（或批量/自动模式）则系统自动通过，不阻断流水线。
 """
 
-import json
 from datetime import datetime
 
 from langgraph.types import interrupt
 
+from ..services import check_budget
 from ..state import Approval, FacilityState
-from ..tools.registry import check_budget
 
 
 def approval_agent(state: FacilityState) -> dict:
     plan = state["assignment"]
     ticket = state["ticket"]
     cost = plan.get("cost", 0.0)
-    budget = json.loads(check_budget.invoke({"cost": cost}))
+    budget = check_budget(cost)
     needs_human = budget["needs_human"] and not state.get("auto_approve", False)
 
     if needs_human:

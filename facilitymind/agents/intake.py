@@ -3,15 +3,14 @@
 职责：把业主/巡检的原始报修文本，转成系统可读的结构化工单。
 有 LLM 时用模型抽取；无 LLM 时回退到关键词规则（保证离线可跑）。
 """
-import json
 import logging
 import re
 from datetime import datetime
 
-from ..knowledge import KB, classify_type, classify_urgency
+from ..knowledge import KB
 from ..llm import extract_json, get_agent_client
+from ..services import classify_fault
 from ..state import FacilityState, Ticket
-from ..tools.registry import classify_fault
 log = logging.getLogger("facilitymind.intake")
 
 
@@ -26,10 +25,10 @@ def intake_agent(state: FacilityState) -> dict:
     raw = state["ticket"]["raw"]
     reporter = state["ticket"].get("reporter", "系统巡检")
 
-    # 规则值作为默认（经 classify_fault 工具），LLM 仅在解析有效时覆盖，保证任何情况下都有合法结论
-    base = json.loads(classify_fault.invoke({"raw": raw}))
-    ttype = base.get("type", classify_type(raw))
-    urgency = base.get("urgency", classify_urgency(raw))
+    # 规则值作为默认，LLM 仅在解析有效时覆盖，保证任何情况下都有合法结论
+    base = classify_fault(raw)
+    ttype = base["type"]
+    urgency = base["urgency"]
     client = get_agent_client("intake")
     if client.available:
         sys_prompt = (

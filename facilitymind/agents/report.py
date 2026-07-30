@@ -4,11 +4,10 @@
 这是"复盘闭环"的最后一环——把一次处置沉淀为可复用的运营洞察。
 """
 
-import json
 import logging
 
+from ..services import save_case
 from ..state import FacilityState, Report
-from ..tools.registry import save_case
 
 log = logging.getLogger("facilitymind.report")
 
@@ -71,7 +70,7 @@ def report_agent(state: FacilityState) -> dict:
         "recurrence": diag.get("recurrence", False),
         "recommendations": recs,
     }
-    saved = json.loads(save_case.invoke({"case_json": json.dumps(case, ensure_ascii=False)}))
+    saved = save_case(case)
     log.info("[Report] %s 案例落库=%s", summary, saved.get("case_id"))
 
     return {"report": report, "messages": [{"role": "system", "content": summary}]}
