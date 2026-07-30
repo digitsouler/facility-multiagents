@@ -53,6 +53,30 @@ def read_sensor(fault_type: str) -> dict:
 TOOLS = {"lookup_kb": lookup_kb, "read_sensor": read_sensor}
 
 
+# 报修原文（如"电梯困人"）与知识库 key 不对应，需要归一化。
+_NAME_MAP = {
+    "电梯": "elevator", "电梯困人": "elevator", " HVAC": "hvac",
+    "空调": "hvac", "空调不制冷": "hvac", "制冷": "hvac",
+    "漏水": "leak", "渗水": "leak",
+    "灯": "lighting", "照明": "lighting", "灯具": "lighting",
+    "消防": "fire", "火警": "fire",
+    "门禁": "access", "门": "access",
+    "清洁": "cleaning", "保洁": "cleaning", "卫生": "cleaning",
+    "绿化": "greening", "植物": "greening",
+}
+
+
+def _normalize_arg(arg: str, fallback: str) -> str:
+    """把 LLM 可能给的报修原文/口语词映射成知识库标准 key。"""
+    arg = str(arg or fallback).strip().lower()
+    if arg in KB:
+        return arg
+    for cn, en in _NAME_MAP.items():
+        if cn in arg:
+            return en
+    return fallback
+
+
 def _decide_offline(client, ticket: dict, observations: dict) -> dict:
     """离线脚本化决策：先查 KB，再读传感器，之后收尾。"""
     if "lookup_kb" not in observations:
@@ -64,10 +88,12 @@ def _decide_offline(client, ticket: dict, observations: dict) -> dict:
 
 def _decide_llm(client, ticket: dict, observations: dict) -> dict:
     """让 LLM 决定下一步：调用工具 或 给出最终诊断。"""
+    ttype = ticket["type"]
     sys_prompt = (
-        "你是设施管理诊断专家，用 ReAct 方式工作。可用工具：lookup_kb(故障类型)、read_sensor(故障类型)。"
-        "先查知识库与传感器，再给出诊断。每步只返回 JSON："
-        '{"action":"lookup_kb"|"read_sensor"|"finish","arg":"<故障类型>"} '
+        f"你是设施管理诊断专家，用 ReAct 方式工作。可用工具：lookup_kb(故障类型)、read_sensor(故障类型)。"
+        f"arg 必须使用标准化故障类型 '{ttype}'，不要传入报修原文。"
+        "工作顺序：1) lookup_kb 查知识库；2) read_sensor 读传感器；3) finish 给出根因诊断。"
+        '每步只返回 JSON：{"action":"lookup_kb"|"read_sensor"|"finish","arg":"' + ttype + '"} '
         'finish 时 {"action":"finish","root_cause":"...","recommended_action":"...","confidence":0.0~1.0}。'
     )
     obs_text = "; ".join(f"{k}={v}" for k, v in observations.items())
@@ -76,7 +102,7 @@ def _decide_llm(client, ticket: dict, observations: dict) -> dict:
     parsed = extract_json(out)
     log.info("[Diagnose][ReAct] LLM 决策=%s", parsed)
     if parsed and parsed.get("action") in TOOLS:
-        return {"action": parsed["action"], "arg": parsed.get("arg", ticket["type"])}
+        return {"action": parsed["action"], "arg": _normalize_arg(parsed.get("arg"), ttype)}
     if parsed and parsed.get("action") == "finish":
         return parsed
     return {"action": "finish"}
@@ -84,7 +110,7 @@ def _decide_llm(client, ticket: dict, observations: dict) -> dict:
 
 def _build_diagnosis(kb: dict, ticket: dict, observations: dict, confidence: float) -> Diagnosis:
     recurrence = _check_recurrence(ticket)
-    note = observations.get("sensor", {}).get("note", "")
+    note = observations.get("read_sensor", {}).get("note", "")
     root_cause = kb["root_cause"]
     if note:
         root_cause = f"{root_cause}（{note}）"
@@ -102,12 +128,18 @@ def _build_diagnosis(kb: dict, ticket: dict, observations: dict, confidence: flo
 def react_diagnose(ticket: dict, client) -> Diagnosis:
     """ReAct 诊断循环：思考→调工具→观察，直到收尾或达上限。"""
     observations: dict = {}
+    called = set()
     decide = _decide_llm if (client and client.available) else _decide_offline
+    ttype = ticket["type"]
     for i in range(MAX_ITER):
-        decision = decide(client, ticket, observations)
+        # 两个工具都已观察，不再给 LLM 浪费步数，直接收尾。
+        if "lookup_kb" in observations and "read_sensor" in observations:
+            decision = {"action": "finish"}
+        else:
+            decision = decide(client, ticket, observations)
         action = decision.get("action")
         if action == "finish":
-            kb = dict(lookup_kb(ticket["type"]))
+            kb = dict(lookup_kb(ttype))
             if decision.get("root_cause"):
                 kb["root_cause"] = decision["root_cause"]
                 kb["recommended_action"] = decision.get("recommended_action", kb["recommended_action"])
@@ -116,10 +148,19 @@ def react_diagnose(ticket: dict, client) -> Diagnosis:
         tool = TOOLS.get(action)
         if not tool:
             break
-        result = tool(decision.get("arg", ticket["type"]))
+        arg = _normalize_arg(decision.get("arg"), ttype)
+        # 同一工具已调过，改调另一个；两个都调过就收尾。
+        if (action, arg) in called:
+            other = next((a for a in TOOLS if (a, arg) not in called), None)
+            if other:
+                action, tool = other, TOOLS[other]
+            else:
+                break
+        result = tool(arg)
         observations[action] = result
-        log.info("[Diagnose][ReAct] 第%d步 调 %s → %s", i + 1, action, result)
-    kb = observations.get("kb") or lookup_kb(ticket["type"])
+        called.add((action, arg))
+        log.info("[Diagnose][ReAct] 第%d步 调 %s(%s) → %s", i + 1, action, arg, result)
+    kb = observations.get("lookup_kb") or lookup_kb(ttype)
     return _build_diagnosis(kb, ticket, observations, 0.82)
 
 
