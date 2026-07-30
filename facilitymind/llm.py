@@ -129,29 +129,22 @@ def _load_profiles() -> tuple[dict, str]:
 _PROFILES, _DEFAULT = _load_profiles()
 
 
-def _load_routing() -> tuple[dict, list]:
-    """读取 models.json 里的 agent_routing 与 ensemble 配置。"""
+def _load_routing() -> dict:
+    """读取 models.json 里的 agent_routing 配置。"""
     try:
         with open(_MODELS_PATH, encoding="utf-8") as f:
             cfg = json.load(f)
     except FileNotFoundError:
         cfg = {}
-    routing = cfg.get("agent_routing", {}) or {}
-    ensemble = cfg.get("ensemble", ["deepseek", "qwen"]) or ["deepseek", "qwen"]
-    return routing, ensemble
+    return cfg.get("agent_routing", {}) or {}
 
 
-_AGENT_ROUTING, _ENSEMBLE_MODELS = _load_routing()
+_AGENT_ROUTING = _load_routing()
 
 
 def get_agent_client(agent: str) -> "LLMClient":
     """返回某个 Agent 绑定的模型客户端（按 models.json 的 agent_routing 分配）。"""
     return get_client(_AGENT_ROUTING.get(agent, _DEFAULT))
-
-
-def get_ensemble_clients() -> list:
-    """返回 Ensemble 参与扇出的可用模型客户端列表（仅含已配置 Key 的）。"""
-    return [get_client(n) for n in _ENSEMBLE_MODELS if n in _PROFILES]
 
 
 def usage_breakdown() -> dict:

@@ -5,7 +5,6 @@
     "diagnose": "deepseek",
     "dispatch": "zhipu"
   },
-  "ensemble": ["deepseek", "qwen", "zhipu"],
   "models": {
     "deepseek": {
       "label": "DeepSeek",

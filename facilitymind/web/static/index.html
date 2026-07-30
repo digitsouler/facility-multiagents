@@ -27,7 +27,6 @@
       </div>
       <div class="flex items-center gap-3 text-xs">
         <span id="mode-badge" class="px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">模式加载中…</span>
-        <span id="mcp-status" class="px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">MCP 加载中…</span>
         <a href="https://github.com/digitsouler/facility-multiagents" target="_blank"
            class="px-2.5 py-1 rounded-full border border-slate-200 text-slate-600 hover:bg-slate-100">GitHub</a>
       </div>
@@ -72,10 +71,6 @@
         <label class="mt-3 flex items-center gap-2 text-xs text-slate-600 cursor-pointer select-none">
           <input id="auto-toggle" type="checkbox" checked class="w-4 h-4 accent-indigo-600" />
           自动批准（关闭后高成本派单将在网页内等待人工确认 · M3）
-        </label>
-        <label class="mt-1 flex items-center gap-2 text-xs text-slate-600 cursor-pointer select-none">
-          <input id="ensemble-toggle" type="checkbox" class="w-4 h-4 accent-indigo-600" />
-          多模型集成 Ensemble（诊断扇出多个模型并合成 · 需配置 ≥2 个模型 Key）
         </label>
       </div>
 
@@ -246,7 +241,6 @@
     function run() {
       if (!selected || es) return;
       const auto = $("auto-toggle").checked ? 1 : 0;
-      const ensemble = $("ensemble-toggle").checked ? 1 : 0;
       $("run-btn").disabled = true;
       $("run-btn").textContent = "运行中…";
       $("pipeline").classList.remove("hidden");
@@ -258,7 +252,7 @@
       states[ORDER[0]] = "running";
       renderSteps(states);
 
-      es = new EventSource(`/api/stream?id=${encodeURIComponent(selected.id)}&auto=${auto}&ensemble=${ensemble}&pace=0.5`);
+      es = new EventSource(`/api/stream?id=${encodeURIComponent(selected.id)}&auto=${auto}&pace=0.5`);
 
       es.addEventListener("start", () => { ORDER.forEach(n => states[n] = "pending"); states[ORDER[0]] = "running"; renderSteps(states); });
 
@@ -302,8 +296,8 @@
       });
 
       es.addEventListener("done", (ev) => {
-        const { result, tokens, model_tokens, llm_calls, trace } = JSON.parse(ev.data);
-        renderResult(result, { tokens, model_tokens, llm_calls, trace });
+        const { result, tokens, model_tokens, llm_calls } = JSON.parse(ev.data);
+        renderResult(result, { tokens, model_tokens, llm_calls });
         closeES();
       });
 
@@ -374,7 +368,7 @@
 
     function renderResult(r, meta) {
       // meta 优先取实时推送的 token；从 /api/result 复看时 token 已并入 r
-      meta = meta || { tokens: r.tokens, model_tokens: r.model_tokens, llm_calls: r.llm_calls, trace: r.trace };
+      meta = meta || { tokens: r.tokens, model_tokens: r.model_tokens, llm_calls: r.llm_calls };
       const d = r.diagnosis || {}, p = r.dispatch_plan || {}, a = r.approval || {}, q = r.qa || {}, rp = r.report || {};
       const card = (title, body) => `<div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
         <div class="text-xs font-semibold text-slate-500 mb-1">${title}</div><div class="text-sm text-slate-800">${body}</div></div>`;
@@ -429,9 +423,7 @@
           ${card("质检", `${q.passed ? "<span class='text-green-600'>通过</span>" : "<span class='text-red-600'>未通过</span>"} · 得分 ${q.score ?? "—"}<div class='text-xs text-slate-500 mt-1'>${(q.issues && q.issues.length) ? "问题：" + esc(q.issues.join("、")) : "无遗留问题"}</div>`)}
         </div>
         ${rp.summary ? `<div class="mt-3">${card("复盘报告", `${esc(rp.summary)}${(rp.recommendations || []).length ? `<ul class='list-disc ml-5 mt-1 text-xs text-slate-600'>${rp.recommendations.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}`)}</div>` : ""}
-        ${toolTrail}
-        ${tokenPanel}
-        ${renderTrace(meta.trace)}`;
+        ${tokenPanel}`;
       $("result").classList.remove("hidden");
     }
 
@@ -463,7 +455,6 @@
         card("平均步骤数", m.avg_steps.toFixed(1), "经 Agent 节点"),
         card("Token 消耗", m.total_tokens, `LLM 调用 ${m.total_llm_calls} 次${Object.keys(m.model_usage || {}).length ? ` · ${Object.keys(m.model_usage).length} 个模型` : ""}`),
         card("平均 LLM 调用", m.total_llm_calls ? (m.total_llm_calls / m.total).toFixed(1) : "0", "每单"),
-        card("MCP 工具调用", m.total_mcp_calls, `Agent 真调工具 ${Object.keys(m.mcp_usage || {}).length} 个 server${Object.keys(m.mcp_usage || {}).length ? " · " + Object.entries(m.mcp_usage).map(([s, c]) => `${esc(s)}×${c}`).join("、") : ""}`),
       ].join("");
 
       // 图表
@@ -535,7 +526,7 @@
       const head = `<tr class="text-slate-500 border-b border-slate-200">
         <th class="text-left py-1.5 pr-2">工单</th><th class="text-left">类型</th><th class="text-left">紧急度</th>
         <th class="text-right">成本</th><th class="text-center">需确认</th><th class="text-center">完成</th>
-        <th class="text-center">QA</th><th class="text-center">SLA</th><th class="text-right">步骤</th><th class="text-right">Token</th><th class="text-center">MCP</th></tr>`;
+        <th class="text-center">QA</th><th class="text-center">SLA</th><th class="text-right">步骤</th><th class="text-right">Token</th></tr>`;
       const rows = recs.map(r => `<tr class="border-b border-slate-100">
         <td class="py-1.5 pr-2 font-medium text-slate-700">${r.id}</td>
         <td>${esc(r.type)}</td><td>${esc(r.urgency)}</td>
@@ -545,8 +536,7 @@
         <td class="text-center">${r.qa_passed ? "✓" : "✗"}</td>
         <td class="text-center">${r.sla_met ? "✓" : "✗"}</td>
         <td class="text-right">${r.steps}</td>
-        <td class="text-right">${r.tokens}</td>
-        <td class="text-center">${r.mcp_calls ? `<span class="text-indigo-600">${r.mcp_calls}</span>` : "—"}</td></tr>`).join("");
+        <td class="text-right">${r.tokens}</td></tr>`).join("");
       $("eval-table").innerHTML = `<table class="w-full text-xs">${head}${rows}</table>`;
     }
 
@@ -575,21 +565,6 @@
         const mj = await mr.json();
         MODEL_LABELS = Object.fromEntries((mj.models || []).map(m => [m.name, m.label]));
       } catch (_) { /* 模型名回退为原始 key */ }
-      try {
-        const kr = await fetch("/api/mcp");
-        const kj = await kr.json();
-        const servers = kj.servers || {};
-        const labels = { iot: "IoT 传感器", cmms: "CMMS", erp: "ERP", im: "IM" };
-        const parts = Object.entries(servers).filter(([n]) => n !== "_error").map(([n, s]) => {
-          const on = s.available;
-          const txt = `${labels[n] || n}${on ? " · 在线" : " · 离线"}`;
-          const cls = on ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-400";
-          return `<span class="px-2 py-0.5 rounded-full ${cls}">${esc(txt)}</span>`;
-        });
-        $("mcp-status").innerHTML = parts.length ? parts.join(" ") : '<span class="px-2.5 py-1 rounded-full bg-slate-100 text-slate-400">MCP 未配置</span>';
-      } catch (_) {
-        $("mcp-status").textContent = "MCP 状态未知";
-      }
     })();
     loadTickets();
   </script>

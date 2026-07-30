@@ -122,17 +122,6 @@ def api_models():
     return {"models": list_models()}
 
 
-@api.get("/api/mcp")
-def api_mcp():
-    """返回 MCP server 接入状态（供 Dashboard 展示 IoT / CMMS 等在线情况）。"""
-    from ..mcp import get_hub
-    try:
-        servers = get_hub().servers()
-    except Exception as e:  # noqa: BLE001
-        servers = {"_error": {"available": False, "error": str(e)}}
-    return {"servers": servers}
-
-
 class ApprovalDecision(BaseModel):
     ticket_id: str
     approved: bool
@@ -164,17 +153,17 @@ def api_eval():
     return {"metrics": metrics, "records": records}
 
 
-def _run_stream(ticket: dict, auto_approve: bool, pace: float, ensemble: bool = False) -> Iterator[str]:
+def _run_stream(ticket: dict, auto_approve: bool, pace: float) -> Iterator[str]:
     """逐节点运行流水线并以 SSE 事件产出；auto_approve=False 时支持 M3 网页人工确认。"""
     config = {"configurable": {"thread_id": ticket["id"]}}
-    initial = {"ticket": ticket, "auto_approve": auto_approve, "ensemble": ensemble}
+    initial = {"ticket": ticket, "auto_approve": auto_approve}
 
     # 跑之前快照各模型累计用量；结束后做差得到"本单"消耗（注册表为进程级全局累加）。
     # 并发跑多条流水线时差值可能互串，Demo 场景为单流顺序执行，足够准确。
     _before_tok = usage_breakdown()
     _before_call = calls_breakdown()
 
-    log.info("[Web] 开始运行工单 %s auto=%s ensemble=%s", ticket["id"], auto_approve, ensemble)
+    log.info("[Web] 开始运行工单 %s auto=%s", ticket["id"], auto_approve)
     yield _sse("start", {"ticket_id": ticket["id"], "order": NODE_ORDER})
 
     try:
@@ -248,19 +237,18 @@ def _run_stream(ticket: dict, auto_approve: bool, pace: float, ensemble: bool = 
 
 
 @api.get("/api/stream")
-def api_stream(id: str, auto: int = 1, pace: float = 0.5, ensemble: int = 0):
+def api_stream(id: str, auto: int = 1, pace: float = 0.5):
     """SSE 端点：实时推送某工单的流水线执行过程。
 
     auto=1（默认）：成本超阈值也自动放行，跑通完整流水线（M1/M2 行为）。
     auto=0：成本超阈值时触发 interrupt，需网页端 /api/approve 决策后继续（M3 行为）。
-    ensemble=1：诊断阶段启用多模型集成（Ensemble）。
     """
     tickets = _tickets_index()
     if id not in tickets:
         return JSONResponse({"error": f"未找到工单 {id}"}, status_code=404)
     headers = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
     return StreamingResponse(
-        _run_stream(tickets[id], bool(auto), max(0.0, pace), bool(ensemble)),
+        _run_stream(tickets[id], bool(auto), max(0.0, pace)),
         media_type="text/event-stream",
         headers=headers,
     )

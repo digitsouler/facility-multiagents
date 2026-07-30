@@ -122,3 +122,49 @@
 10:49:25 | INFO    | facilitymind.graph | [Report] ▶ 进入
 10:49:25 | INFO    | facilitymind.report | [Report] 工单 T-003（hvac / 紧急度 high）于 2026-07-28T10:49:25 经 system 处置，根因为「AHU过滤器堵塞导致送风温度过高，制冷效果下降（IoT佐证：12楼空调机房 AHU：supply_air_temp=29.5℃(基线18.0)、filter_pressure=180.0Pa(基线120.0)）」，由 美的暖通服务 完成，报价 ¥800，质检通过。
 10:49:25 | INFO    | facilitymind.graph | [Report] ✔ 完成 用时=0.00s
+10:07:29 | INFO    | facilitymind.cli | [CLI] 运行工单 T-001 auto=True
+10:07:29 | INFO    | facilitymind.graph | [Intake] ▶ 进入
+10:07:29 | INFO    | facilitymind.llm | [LLM:qwen] ▶ 调用 model=qwen3.7-plus
+10:07:35 | INFO    | facilitymind.llm | [LLM:qwen] ✔ 完成 297 tokens
+10:07:35 | INFO    | facilitymind.graph | [Intake] ✔ 完成 用时=6.24s
+10:07:35 | INFO    | facilitymind.graph | [Diagnose] ▶ 进入
+10:07:35 | INFO    | facilitymind.diagnose | [Diagnose] ▶ 开始诊断 ticket=T-001 类型=elevator 重复=False
+10:07:35 | INFO    | facilitymind.llm | [LLM:deepseek] ▶ 调用 model=deepseek-chat
+10:07:37 | INFO    | facilitymind.llm | [LLM:deepseek] ✔ 完成 127 tokens
+10:07:37 | INFO    | facilitymind.diagnose | [Diagnose] ✔ 完成 用时=1.67s 根因=电梯门锁回路故障或门机系统异常；建议=立即派遣电梯维保人员前往现场，手动盘车开门解救被困人员，随后检查门锁触点、门机控制器及导轨状态；预估¥2400；SLA 2h；置信度=0.85
+10:07:37 | INFO    | facilitymind.graph | [Diagnose] ✔ 完成 用时=1.67s
+10:07:37 | INFO    | facilitymind.graph | [Dispatch] ▶ 进入
+10:07:37 | INFO    | facilitymind.llm | [LLM:zhipu] ▶ 调用 model=glm-5.2
+10:07:44 | INFO    | facilitymind.llm | [LLM:zhipu] ✔ 完成 623 tokens
+10:07:44 | INFO    | facilitymind.dispatch | [Dispatch] 派单 → 迅达电梯维保（响应30分钟 / ¥2400）：按技能[elevator_maint]匹配，迅达电梯维保响应30分钟最快且报价最低
+10:07:44 | INFO    | facilitymind.graph | [Dispatch] ✔ 完成 用时=6.73s
+10:07:44 | INFO    | facilitymind.graph | [Approval] ▶ 进入
+10:07:44 | INFO    | facilitymind.graph | [Approval] ✔ 完成 用时=0.00s
+10:07:44 | INFO    | facilitymind.graph | [QA] ▶ 进入
+10:07:44 | INFO    | facilitymind.graph | [QA] ✔ 完成 用时=0.00s
+10:07:44 | INFO    | facilitymind.graph | [Report] ▶ 进入
+10:07:44 | INFO    | facilitymind.report | [Report] 工单 T-001（elevator / 紧急度 high）于 2026-07-30T10:07:44 经 system 处置，根因为「电梯门锁回路故障或门机系统异常」，由 迅达电梯维保 完成，报价 ¥2400，质检通过。
+10:07:44 | INFO    | facilitymind.graph | [Report] ✔ 完成 用时=0.00s
+10:07:56 | INFO    | facilitymind.cli | [CLI] 运行工单 T-003 auto=True
+10:07:56 | INFO    | facilitymind.graph | [Intake] ▶ 进入
+10:07:57 | INFO    | facilitymind.llm | [LLM:qwen] ▶ 调用 model=qwen3.7-plus
+10:08:07 | INFO    | facilitymind.llm | [LLM:qwen] ✔ 完成 552 tokens
+10:08:07 | INFO    | facilitymind.graph | [Intake] ✔ 完成 用时=10.14s
+10:08:07 | INFO    | facilitymind.graph | [Diagnose] ▶ 进入
+10:08:07 | INFO    | facilitymind.diagnose | [Diagnose] ▶ 开始诊断 ticket=T-003 类型=hvac 重复=False
+10:08:07 | INFO    | facilitymind.llm | [LLM:deepseek] ▶ 调用 model=deepseek-chat
+10:08:09 | INFO    | facilitymind.llm | [LLM:deepseek] ✔ 完成 124 tokens
+10:08:09 | INFO    | facilitymind.diagnose | [Diagnose] ✔ 完成 用时=1.90s 根因=空调制冷系统故障，可能原因包括制冷剂泄漏、压缩机故障或冷凝器散热不良；建议=立即联系空调维修人员检查制冷剂压力、压缩机运行状态及冷凝器清洁情况，必要时补充制冷剂或更换故障部件；预估¥800；SLA 6h；置信度=0.85
+10:08:09 | INFO    | facilitymind.graph | [Diagnose] ✔ 完成 用时=1.90s
+10:08:09 | INFO    | facilitymind.graph | [Dispatch] ▶ 进入
+10:08:09 | INFO    | facilitymind.llm | [LLM:zhipu] ▶ 调用 model=glm-5.2
+10:08:16 | INFO    | facilitymind.llm | [LLM:zhipu] ✔ 完成 513 tokens
+10:08:16 | INFO    | facilitymind.dispatch | [Dispatch] 派单 → 美的暖通服务（响应45分钟 / ¥800）：按技能[hvac_maint]匹配，美的暖通服务响应45分钟最快且报价最低
+10:08:16 | INFO    | facilitymind.graph | [Dispatch] ✔ 完成 用时=7.14s
+10:08:16 | INFO    | facilitymind.graph | [Approval] ▶ 进入
+10:08:16 | INFO    | facilitymind.graph | [Approval] ✔ 完成 用时=0.00s
+10:08:16 | INFO    | facilitymind.graph | [QA] ▶ 进入
+10:08:16 | INFO    | facilitymind.graph | [QA] ✔ 完成 用时=0.00s
+10:08:16 | INFO    | facilitymind.graph | [Report] ▶ 进入
+10:08:16 | INFO    | facilitymind.report | [Report] 工单 T-003（hvac / 紧急度 high）于 2026-07-30T10:08:16 经 system 处置，根因为「空调制冷系统故障，可能原因包括制冷剂泄漏、压缩机故障或冷凝器散热不良」，由 美的暖通服务 完成，报价 ¥800，质检通过。
+10:08:16 | INFO    | facilitymind.graph | [Report] ✔ 完成 用时=0.00s

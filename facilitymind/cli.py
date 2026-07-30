@@ -6,7 +6,6 @@
   python -m facilitymind.cli --scenario elevator_fault   # 跑预设场景
   python -m facilitymind.cli --id T-001 --auto # 跳过人工确认
   python -m facilitymind.cli --id T-001 --compare # 对比规则库 vs DeepSeek 结论差异
-  python -m facilitymind.cli --id T-001 --ensemble # 诊断启用多模型集成（Ensemble）
 
 无 LLM Key 时自动走规则模式，开箱即跑。
 
@@ -58,10 +57,10 @@ def _print_result(ticket_id: str, result: dict) -> None:
     print()
 
 
-def run_one(raw_ticket: dict, config: dict, auto_approve: bool, ensemble: bool = False) -> dict:
+def run_one(raw_ticket: dict, config: dict, auto_approve: bool) -> dict:
     """运行单条工单；如需人工确认则处理 interrupt 并恢复。"""
-    log.info("[CLI] 运行工单 %s auto=%s ensemble=%s", raw_ticket.get("id"), auto_approve, ensemble)
-    initial = {"ticket": raw_ticket, "auto_approve": auto_approve, "ensemble": ensemble}
+    log.info("[CLI] 运行工单 %s auto=%s", raw_ticket.get("id"), auto_approve)
+    initial = {"ticket": raw_ticket, "auto_approve": auto_approve}
     result = app.invoke(initial, config)
 
     if "__interrupt__" in result:
@@ -92,7 +91,6 @@ def main() -> None:
     parser.add_argument("--auto", action="store_true", help="跳过人工确认（自动批准）")
     parser.add_argument("--compare", action="store_true", help="对比规则库与默认 LLM 的结论差异（不跑完整流水线）")
     parser.add_argument("--compare-models", action="store_true", help="多模型横向对比（规则库 vs 全部已启用模型）")
-    parser.add_argument("--ensemble", action="store_true", help="诊断阶段启用多模型集成（Ensemble）")
     args = parser.parse_args()
     setup_logging(log_file="logs/pipeline.log")
 
@@ -132,7 +130,7 @@ def main() -> None:
     # 正常流水线模式
     for t in targets:
         config = {"configurable": {"thread_id": t["id"]}}
-        _print_result(t["id"], run_one(t, config, auto_approve=args.auto or args.all, ensemble=args.ensemble))
+        _print_result(t["id"], run_one(t, config, auto_approve=args.auto or args.all))
 
 
 if __name__ == "__main__":
