@@ -6,9 +6,11 @@
 """
 
 import hashlib
+import json
 from langgraph.types import interrupt
 
 from ..state import Assignment, Feedback, FacilityState
+from ..tools.registry import validate_evidence
 
 
 def _simulate_feedback(ticket: dict, plan: Assignment) -> Feedback:
@@ -48,5 +50,9 @@ def technician_report_agent(state: FacilityState) -> dict:
         }
         note = f"师傅 {feedback['technician']} 回传完毕"
 
-    log_msg = f"[TechnicianReport] {note}；响应{feedback['actual_response_min']}分钟，影像={feedback['photos_uploaded']}，资质={feedback['cert_verified']}"
+    ev = json.loads(validate_evidence.invoke({"feedback_json": json.dumps(feedback, ensure_ascii=False)}))
+    log_msg = (
+        f"[TechnicianReport] {note}；响应{feedback['actual_response_min']}分钟，"
+        f"影像={feedback['photos_uploaded']}，资质={feedback['cert_verified']}，回传完整={ev['complete']}"
+    )
     return {"feedback": feedback, "messages": [{"role": "system", "content": log_msg}]}

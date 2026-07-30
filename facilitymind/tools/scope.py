@@ -8,13 +8,13 @@ from .registry import get_tool
 
 # agent 名 → 它能用的工具名列表（充当时 LLM 的"可见工具面"，防止跨域误调）
 AGENT_TOOLS: dict[str, list[str]] = {
-    "intake": [],
-    "diagnose": ["lookup_kb", "read_sensor", "recall_cases"],
-    "dispatch": [],          # 第二步加 rank_vendors（接 Redis 口碑）
-    "approval": [],
-    "technician_report": [],
-    "qa": [],
-    "report": [],
+    "intake": ["classify_fault"],
+    "diagnose": ["read_sensor", "lookup_kb", "recall_cases"],
+    "dispatch": ["rank_vendors"],
+    "approval": ["check_budget"],
+    "technician_report": ["validate_evidence"],
+    "qa": ["verify_photos", "check_sla", "check_cost", "write_prevention"],
+    "report": ["save_case"],
 }
 
 

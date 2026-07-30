@@ -117,7 +117,7 @@ class LLMClient:
             return {"content": "", "tool_calls": []}
         _tok_before = self.total_tokens
         log.info("[LLM:%s] ▶ 调用(工具) model=%s tools=%d", self.name, self.model, len(tools))
-        log.info("[LLM:%s] ▶ 调用(工具) user=%s", self.name, user)
+        # log.info("[LLM:%s] ▶ 调用(工具) user=%s", self.name, user)
         try:
             resp = self._client.chat.completions.create(
                 model=self.model,
@@ -141,7 +141,7 @@ class LLMClient:
         self.call_count += 1
         _tokens = self.total_tokens - _tok_before
 
-        log.info("[LLM:%s] ▶ 工具调用 %d tokens 内容响应=%s", self.name, _tokens, resp)
+        # log.info("[LLM:%s] ▶ 工具调用 %d tokens 内容响应=%s", self.name, _tokens, resp)
 
         msg = resp.choices[0].message
         tool_calls = []

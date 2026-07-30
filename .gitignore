@@ -12,3 +12,8 @@ venv/
 # IDE
 .idea/
 .vscode/
+
+# Runtime artifacts
+logs/
+**/data/cases.jsonl
+eval_report.json

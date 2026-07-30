@@ -87,16 +87,18 @@ KB: dict[str, dict] = {
     },
 }
 
-# 资源池：技能标签匹配的 vendor
+# 资源池：技能标签匹配的 vendor。quality 为历史质量分(0~1)，用于性价比排序。
 VENDORS: list[dict] = [
-    {"name": "迅达电梯维保", "skill": "elevator_maint", "response_min": 30, "cost": 2400.0},
-    {"name": "美的暖通服务", "skill": "hvac_maint", "response_min": 45, "cost": 800.0},
-    {"name": "广深管道抢修", "skill": "plumbing", "response_min": 40, "cost": 600.0},
-    {"name": "珠江电气工程", "skill": "electrician", "response_min": 35, "cost": 300.0},
-    {"name": "粤安消防维保", "skill": "fire_safety", "response_min": 20, "cost": 200.0},
-    {"name": "智城门禁运维", "skill": "access_ctrl", "response_min": 50, "cost": 400.0},
-    {"name": "净美保洁", "skill": "cleaning", "response_min": 60, "cost": 150.0},
-    {"name": "园丁绿化", "skill": "landscape", "response_min": 120, "cost": 250.0},
+    {"name": "迅达电梯维保", "skill": "elevator_maint", "response_min": 30, "cost": 2400.0, "quality": 0.92},
+    {"name": "日立电梯急修", "skill": "elevator_maint", "response_min": 50, "cost": 2800.0, "quality": 0.85},
+    {"name": "美的暖通服务", "skill": "hvac_maint", "response_min": 45, "cost": 800.0, "quality": 0.90},
+    {"name": "格力暖通快修", "skill": "hvac_maint", "response_min": 60, "cost": 950.0, "quality": 0.88},
+    {"name": "广深管道抢修", "skill": "plumbing", "response_min": 40, "cost": 600.0, "quality": 0.88},
+    {"name": "珠江电气工程", "skill": "electrician", "response_min": 35, "cost": 300.0, "quality": 0.90},
+    {"name": "粤安消防维保", "skill": "fire_safety", "response_min": 20, "cost": 200.0, "quality": 0.93},
+    {"name": "智城门禁运维", "skill": "access_ctrl", "response_min": 50, "cost": 400.0, "quality": 0.86},
+    {"name": "净美保洁", "skill": "cleaning", "response_min": 60, "cost": 150.0, "quality": 0.90},
+    {"name": "园丁绿化", "skill": "landscape", "response_min": 120, "cost": 250.0, "quality": 0.90},
 ]
 
 # 人工确认阈值：派单报价超过该金额需要人工审批（企业落地常见管控点）。

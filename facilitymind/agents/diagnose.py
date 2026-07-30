@@ -90,13 +90,13 @@ def _tool_content(msgs: list, name: str) -> dict:
 
 
 def _offline_ai(msgs: list, ticket: dict) -> AIMessage:
-    """离线脚本化决策：依次 lookup_kb → recall_cases → read_sensor，之后收尾。"""
+    """离线脚本化决策：先读传感器拿现场证据，再查知识库，最后召回历史案例，之后收尾。"""
     ttype = ticket["type"]
     called = [m.name for m in msgs if isinstance(m, ToolMessage)]
     seq = [
+        ("read_sensor", {"fault_type": ttype}),
         ("lookup_kb", {"fault_type": ttype}),
         ("recall_cases", {"fault_type": ttype, "location": ticket.get("location", "")}),
-        ("read_sensor", {"fault_type": ttype}),
     ]
     for name, args in seq:
         if name not in called:
@@ -132,9 +132,9 @@ def _build_diag_graph(tools: list):
         ttype = ticket["type"]
         sys_prompt = (
             "你是设施管理诊断专家，用 ReAct 工作。\n"
-            "可用工具：lookup_kb(fault_type)、recall_cases(fault_type, location)、read_sensor(fault_type)。\n"
+            "可用工具：read_sensor(fault_type)、lookup_kb(fault_type)、recall_cases(fault_type, location)。\n"
             f"arg 必须用标准化故障类型 '{ttype}'，不要传入报修原文。\n"
-            "顺序：1) lookup_kb 查知识库；2) recall_cases 检索相似案例；3) read_sensor 读传感器；4) 给出诊断。\n"
+            "建议顺序（证据优先）：1) read_sensor 先读现场传感器取证；2) lookup_kb 查知识库；3) recall_cases 召回历史案例；4) 给出诊断。\n"
             '最终以 JSON 返回 {"root_cause":"...","recommended_action":"...","confidence":0.0~1.0}。'
         )
         if client and client.available:
@@ -198,7 +198,7 @@ def diagnose_agent(state: FacilityState) -> dict:
 
     init = {"ticket": ticket, "messages": [HumanMessage(content=_diag_user(ticket, []))]}
     result = _DIAG_GRAPH.invoke(init)
-    log.info("[Diagnose] ▶ 调用(工具) result=%s", result)
+    # log.info("[Diagnose] ▶ 调用(工具) result=%s", result)
 
     diag = _parse_diagnosis(ticket, result["messages"][-1].content, result["messages"])
 
