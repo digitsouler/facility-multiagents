@@ -17,7 +17,7 @@ from ..state import Approval, FacilityState
 
 
 def approval_agent(state: FacilityState) -> dict:
-    plan = state["dispatch_plan"]
+    plan = state["assignment"]
     ticket = state["ticket"]
     cost = plan.get("cost", 0.0)
     needs_human = (cost > APPROVAL_THRESHOLD_COST) and not state.get("auto_approve", False)

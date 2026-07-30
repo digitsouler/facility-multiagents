@@ -8,7 +8,7 @@ import logging
 
 from ..dataio import load_vendors
 from ..llm import get_agent_client
-from ..state import DispatchPlan, FacilityState
+from ..state import Assignment, FacilityState
 
 log = logging.getLogger("facilitymind.dispatch")
 
@@ -35,11 +35,11 @@ def dispatch_agent(state: FacilityState) -> dict:
         )
         client.complete(sys_prompt, f"skill={skill}, vendors={candidates}")
 
-    plan: DispatchPlan = {
+    plan: Assignment = {
         "vendor": best["name"],
         "response_time_min": best["response_min"],
         "cost": best["cost"],
         "rationale": rationale,
     }
     log.info("[Dispatch] 派单 → %s（响应%s分钟 / ¥%.0f）：%s", best["name"], best["response_min"], best["cost"], rationale)
-    return {"dispatch_plan": plan, "messages": [{"role": "system", "content": f"[Dispatch] 派单 → {best['name']}，预计{best['response_min']}分钟响应，报价¥{best['cost']:.0f}；{rationale}"}]}
+    return {"assignment": plan, "messages": [{"role": "system", "content": f"[Dispatch] 派单 → {best['name']}，预计{best['response_min']}分钟响应，报价¥{best['cost']:.0f}；{rationale}"}]}

@@ -11,7 +11,7 @@
       "api_key_env": "LLM_API_KEY",
       "base_url_env": "LLM_BASE_URL",
       "model_env": "LLM_MODEL",
-      "model": "deepseek-chat",
+      "model": "deepseek-v4-flash",
       "enabled": true
     },
     "qwen": {

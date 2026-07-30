@@ -14,10 +14,10 @@ log = logging.getLogger("facilitymind.report")
 def report_agent(state: FacilityState) -> dict:
     ticket = state["ticket"]
     diag = state["diagnosis"]
-    plan = state["dispatch_plan"]
+    plan = state["assignment"]
     approval = state.get("approval", {})
     qa = state.get("qa", {})
-    execution = state.get("execution", {})
+    feedback = state.get("feedback", {})
 
     recs: list[str] = []
     if diag.get("recurrence"):
@@ -50,7 +50,7 @@ def report_agent(state: FacilityState) -> dict:
             "cost": plan["cost"],
             "sla_hours": diag["sla_hours"],
             "qa_score": qa.get("score", 0.0),
-            "actual_response_min": execution.get("actual_response_min", 0),
+            "actual_response_min": feedback.get("actual_response_min", 0),
             "recurrence": diag.get("recurrence", False),
         },
     }

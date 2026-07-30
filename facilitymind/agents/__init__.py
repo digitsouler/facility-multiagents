@@ -4,12 +4,14 @@ from .dispatch import dispatch_agent
 from .intake import intake_agent
 from .qa import qa_agent
 from .report import report_agent
+from .technician_report import technician_report_agent
 
 __all__ = [
     "intake_agent",
     "diagnose_agent",
     "dispatch_agent",
     "approval_agent",
+    "technician_report_agent",
     "qa_agent",
     "report_agent",
 ]
