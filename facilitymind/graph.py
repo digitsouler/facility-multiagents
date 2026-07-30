@@ -71,5 +71,5 @@ def build_graph():
     return graph.compile(checkpointer=MemorySaver())
 
 
-# 编译后的可执行图（模块级单例，CLI/API 复用）
+# 编译后的可执行图（模块级单例，供 API 复用）
 app = build_graph()

@@ -1,6 +1,6 @@
-"""集中日志配置：CLI 与 Web 共用。
+"""集中日志配置：供引擎与评估使用。
 
-用法：在程序入口（cli.main / web.__main__.main）调用一次 setup_logging() 即可。
+用法：在程序入口调用一次 setup_logging() 即可。
 默认输出到控制台，可选落盘到 logs/pipeline.log 便于事后追查流程。
 """
 

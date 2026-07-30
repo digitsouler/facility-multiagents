@@ -18,19 +18,19 @@
 
 ---
 
-## 30 秒看懂（直接看效果）
+## 30 秒看懂（直接跑评估）
 
 ```bash
 pip install -r requirements.txt
-python -m facilitymind.web          # 启动后打开 http://127.0.0.1:8000
+python -m facilitymind.eval --all --out eval_report.md --json eval_report.json
 ```
 
-打开网页 → 选一张示例工单 → 点「运行」，你会看到：
+跑完打开 `eval_report.md`，你会看到：
 
-1. **6 个 Agent 节点依次点亮**：受理 → 诊断 → 派单 → 审批 → 质检 → 报告
+1. **6 个 Agent 节点全链路跑通**：受理 → 诊断 → 派单 → 审批 → 质检 → 报告
 2. **诊断阶段结合故障知识库与 LLM 推理**给出可解释的根因与处置建议
-3. **高成本派单弹出审批卡**：点「批准 / 驳回」，流程继续或终止
-4. **结案面板汇总**诊断 / 派单 / 质检结论与可执行优化建议
+3. **人工确认（HITL）统计**：高成本派单触发审批，通过率与拦截一目了然
+4. **量化评估**：完成率 / QA 通过率 / SLA / 成本 / 各模型 Token 一目了然
 
 > 一句话：这是一个**会自己查证、可追溯、可干预**的设施报修系统。
 > 当前内置 20 张示例工单，开箱即跑；无 API Key 也能跑（自动走规则回退）。
@@ -45,7 +45,7 @@ python -m facilitymind.web          # 启动后打开 http://127.0.0.1:8000
 | ---- | -------- |
 | 🛡️ **可控 + 离线友好** | 高价值派单设一道人工闸（Human-in-the-Loop），成本超阈值才等人批；无 LLM Key 时整套降级为规则库，照样闭环 |
 | 🤝 **多模型协作** | Model Registry 按 Agent 路由不同模型，无 Key 自动降级规则库；按模型拆分 Token / 成本 |
-| 🔍 **全流程可观测** | 标准 logging 双路输出（CLI 控制台 + 文件落盘），节点耗时 / LLM tokens / 诊断结论清晰可读 |
+| 🔍 **全流程可观测** | 标准 logging 双路输出（终端 + 文件落盘），节点耗时 / LLM tokens / 诊断结论清晰可读 |
 
 ---
 
@@ -77,7 +77,7 @@ graph LR
 ```bash
 cd facilitymind
 pip install -r requirements.txt
-python -m facilitymind.web          # 默认 http://127.0.0.1:8000
+python -m facilitymind.eval --all        # 一键批量跑示例工单并生成评估报告
 ```
 
 - **不填任何 Key**：引擎自动走规则模式，开箱即跑。
@@ -92,18 +92,9 @@ python -m facilitymind.web          # 默认 http://127.0.0.1:8000
 | 🤝 多模型协作 | Model Registry 按 Agent 路由不同模型；无 Key 自动降级规则库；按模型拆分 Token / 成本 |
 | 📚 内置知识库 | 8 类常见设施故障的处理经验 + 每类 QA 检查清单，离线可用 |
 | ✅ 评估 Harness | 一键批量跑工单，量化完成率 / QA 通过率 / SLA / 成本 / Token，输出 Markdown + JSON |
-| 🖥️ Web Dashboard | 浏览器内看 6-Agent 实时点亮、网页内人工确认、看评估图表 |
 
 <details>
-<summary><b>进阶：命令行 / 评估（点开）</b></summary>
-
-**命令行跑单条工单**
-
-```bash
-python -m facilitymind.cli --id T-001                 # 成本超阈值会触发终端内人工确认
-python -m facilitymind.cli --id T-001 --auto          # 跳过人工确认
-python -m facilitymind.cli --id T-001 --compare      # 对比规则库 vs LLM 结论
-```
+<summary><b>评估 Harness（点开）</b></summary>
 
 **批量评估**
 
@@ -118,9 +109,8 @@ python -m facilitymind.eval --all --out eval_report.md --json eval_report.json
 ## 技术栈
 
 - **编排**：LangGraph 状态机（节点可审计、可重放、interrupt 暂停/恢复）
-- **Web**：FastAPI + SSE 实时流 + 原生 JS（零前端构建）
 - **LLM 层**：可插拔 Model Registry（DeepSeek / Qwen / 智谱 / Ollama），无 Key 自动降级规则库
-- **可观测**：标准 logging 模块（CLI 控制台 + 文件落盘，双路）
+- **可观测**：标准 logging 模块（终端 + 文件落盘，双路）
 
 ---
 
@@ -128,7 +118,7 @@ python -m facilitymind.eval --all --out eval_report.md --json eval_report.json
 
 - [x] 6-Agent 闭环（受理 → 诊断 → 派单 → 审批 → 质检 → 报告）
 - [x] Human-in-the-Loop 审批、QA、报告
-- [x] 评估 Harness、Web Dashboard
+- [x] 评估 Harness
 - [x] 多模型协作（按 Agent 路由）、标准 logging 可观测
 - [ ] 经验记忆层（基于 Redis / Qdrant 重建）
 - [ ] ReAct 自主诊断循环

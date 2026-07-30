@@ -20,9 +20,7 @@ dependencies = [
 ]
 
 [project.scripts]
-facilitymind = "facilitymind.cli:main"
 facilitymind-eval = "facilitymind.eval:main"
-facilitymind-web = "facilitymind.web.__main__:main"
 
 [tool.setuptools.packages.find]
 include = ["facilitymind*"]

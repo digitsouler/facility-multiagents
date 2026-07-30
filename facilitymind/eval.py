@@ -42,7 +42,7 @@ def run_one(raw_ticket: dict) -> dict:
     """跑单条工单并抽取评估指标。"""
     reset_all()  # 清零所有已缓存模型的计量，实现按工单拆分
     initial = {"ticket": raw_ticket, "auto_approve": True}
-    # 用 eval- 前缀 thread_id，避免与 Dashboard 看板的流式 thread_id 互相污染 MemorySaver 状态
+    # 用 eval- 前缀 thread_id，避免与流式 thread_id 互相污染 MemorySaver 状态
     result = app.invoke(initial, {"configurable": {"thread_id": "eval-" + raw_ticket["id"]}})
 
     diag = result.get("diagnosis", {})

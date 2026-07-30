@@ -153,7 +153,7 @@ def usage_breakdown() -> dict:
 
 
 def calls_breakdown() -> dict:
-    """各模型已调用次数快照（与 usage_breakdown 配套，供 Dashboard 按模型拆分计量）。"""
+    """各模型已调用次数快照（与 usage_breakdown 配套，供按模型拆分计量）。"""
     return {name: c.call_count for name, c in _REGISTRY.items()}
 
 
@@ -202,7 +202,7 @@ def get_client(name: Optional[str] = None) -> LLMClient:
 
 
 def list_models() -> list[dict]:
-    """列出全部已声明模型及其可用性（供 CLI / Dashboard 展示）。"""
+    """列出全部已声明模型及其可用性（供模型列表展示）。"""
     out = []
     for name, p in _PROFILES.items():
         c = get_client(name)

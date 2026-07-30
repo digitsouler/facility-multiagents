@@ -70,7 +70,7 @@ class Report(TypedDict):
 
 
 class ToolCall(TypedDict, total=False):
-    """一次工具调用轨迹（供 Dashboard 时间线展示）。"""
+    """一次工具调用轨迹（供时间线展示，预留）。"""
     agent: str               # 发起调用的 Agent
     server: str              # 工具所属服务名
     tool: str                # 工具名
