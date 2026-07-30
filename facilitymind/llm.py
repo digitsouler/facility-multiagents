@@ -106,6 +106,58 @@ class LLMClient:
         return resp.choices[0].message.content or ""
 
 
+    def complete_with_tools(
+        self, system: str, user: str, tools: list[dict], temperature: float = 0.0
+    ) -> dict:
+        """带 function-calling 的调用：返回 {'content': str, 'tool_calls': [{'name','args'}]}。
+
+        供 ReAct 子图让 LLM 决定调哪个工具。无 Key/异常时返回空，调用方走规则分支（与 complete 一致）。
+        """
+        if not self._client:
+            return {"content": "", "tool_calls": []}
+        _tok_before = self.total_tokens
+        log.info("[LLM:%s] ▶ 调用(工具) model=%s tools=%d", self.name, self.model, len(tools))
+        log.info("[LLM:%s] ▶ 调用(工具) user=%s", self.name, user)
+        try:
+            resp = self._client.chat.completions.create(
+                model=self.model,
+                temperature=temperature,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+                tools=tools,
+                tool_choice="auto",
+            )
+        except Exception as exc:  # noqa: BLE001 - 在线模式需对外部服务容错
+            log.warning("[LLM:%s] ✖ 工具调用失败，回退规则库：%s: %s", self.name, type(exc).__name__, exc)
+            return {"content": "", "tool_calls": []}
+
+        usage = getattr(resp, "usage", None)
+        if usage is not None and getattr(usage, "total_tokens", None) is not None:
+            self.total_tokens += int(usage.total_tokens)
+        else:
+            self.total_tokens += max(1, len(system) // 2 + len(user) // 2)
+        self.call_count += 1
+        _tokens = self.total_tokens - _tok_before
+
+        log.info("[LLM:%s] ▶ 工具调用 %d tokens 内容响应=%s", self.name, _tokens, resp)
+
+        msg = resp.choices[0].message
+        tool_calls = []
+        for tc in getattr(msg, "tool_calls", None) or []:
+            args: dict = {}
+            if tc.function.arguments:
+                try:
+                    args = json.loads(tc.function.arguments)
+                except (json.JSONDecodeError, ValueError):
+                    args = {}
+            tool_calls.append({"name": tc.function.name, "args": args})
+        names = [t["name"] for t in tool_calls] or None
+        log.info("[LLM:%s] ✔ 完成(工具) %d tokens 工具=%s", self.name, _tokens, names)
+        return {"content": msg.content or "", "tool_calls": tool_calls}
+
+
 # --------------------------------------------------------------------------- #
 # 多模型注册表（Model Registry）
 # --------------------------------------------------------------------------- #
