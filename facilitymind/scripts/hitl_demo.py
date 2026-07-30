@@ -6,12 +6,14 @@
 """
 
 import argparse
+import os
 
 from langgraph.errors import GraphInterrupt
 from langgraph.types import Command
 
 from ..dataio import load_tickets
 from ..graph import app
+from ..logconf import setup_logging
 
 
 def _prompt(payload: dict) -> dict:
@@ -43,6 +45,8 @@ def _prompt(payload: dict) -> dict:
 
 
 def main() -> None:
+    root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    setup_logging(log_file=os.path.join(root, "logs", "pipeline.log"))
     parser = argparse.ArgumentParser(description="FacilityMind 终端 HITL 演示")
     parser.add_argument("--id", required=True, help="工单 ID")
     args = parser.parse_args()

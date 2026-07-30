@@ -3,13 +3,15 @@
 职责：把业主/巡检的原始报修文本，转成系统可读的结构化工单。
 有 LLM 时用模型抽取；无 LLM 时回退到关键词规则（保证离线可跑）。
 """
-
+import logging
 import re
 from datetime import datetime
 
 from ..knowledge import KB, classify_type, classify_urgency
 from ..llm import extract_json, get_agent_client
 from ..state import FacilityState, Ticket
+log = logging.getLogger("facilitymind.intake")
+
 
 
 def _guess_location(text: str) -> str:
@@ -33,6 +35,7 @@ def intake_agent(state: FacilityState) -> dict:
             '{"type": "...", "urgency": "..."}。'
         )
         out = client.complete(sys_prompt, raw)
+        log.info("[Intake] LLM 输出=%s", out)
         parsed = extract_json(out)
         if parsed:
             cand_type = str(parsed.get("type", "")).strip().lower()
@@ -54,5 +57,5 @@ def intake_agent(state: FacilityState) -> dict:
         "reporter": reporter,
         "created_at": datetime.now().isoformat(timespec="seconds"),
     }
-    log = f"[Intake] 受理工单 {ticket['id']} → 类型={ttype}, 紧急度={urgency}, 位置={ticket['location']}"
-    return {"ticket": ticket, "messages": [{"role": "system", "content": log}]}
+    log1 = f"[Intake] 受理工单 {ticket['id']} → 类型={ttype}, 紧急度={urgency}, 位置={ticket['location']}"
+    return {"ticket": ticket, "messages": [{"role": "system", "content": log1}]}

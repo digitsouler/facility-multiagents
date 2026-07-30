@@ -55,9 +55,9 @@ TOOLS = {"lookup_kb": lookup_kb, "read_sensor": read_sensor}
 
 def _decide_offline(client, ticket: dict, observations: dict) -> dict:
     """离线脚本化决策：先查 KB，再读传感器，之后收尾。"""
-    if "kb" not in observations:
+    if "lookup_kb" not in observations:
         return {"action": "lookup_kb", "arg": ticket["type"]}
-    if "sensor" not in observations:
+    if "read_sensor" not in observations:
         return {"action": "read_sensor", "arg": ticket["type"]}
     return {"action": "finish"}
 
@@ -74,6 +74,7 @@ def _decide_llm(client, ticket: dict, observations: dict) -> dict:
     user = f"工单：{ticket['raw']}\n已观察：{obs_text or '无'}"
     out = client.complete(sys_prompt, user)
     parsed = extract_json(out)
+    log.info("[Diagnose][ReAct] LLM 决策=%s", parsed)
     if parsed and parsed.get("action") in TOOLS:
         return {"action": parsed["action"], "arg": parsed.get("arg", ticket["type"])}
     if parsed and parsed.get("action") == "finish":

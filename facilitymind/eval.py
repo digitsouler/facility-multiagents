@@ -10,11 +10,13 @@
 
 import argparse
 import json
+import os
 
 from .dataio import load_tickets
 from .graph import app
 from .knowledge import APPROVAL_THRESHOLD_COST
 from .llm import llm, reset_all, total_tokens_all
+from .logconf import setup_logging
 
 
 def _count_steps(messages) -> int:
@@ -108,6 +110,7 @@ def render_report(records: list[dict], metrics: dict) -> str:
 
 
 def main() -> None:
+    setup_logging(log_file=os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs", "pipeline.log"))
     parser = argparse.ArgumentParser(description="FacilityMind 评估 harness")
     parser.add_argument("--all", action="store_true", help="评估全部内置工单")
     parser.add_argument("--id", action="append", help="只评估指定工单 ID（可重复）")
