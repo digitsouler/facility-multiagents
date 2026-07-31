@@ -28,7 +28,7 @@ from ..tools import get_tools_for_agent
 log = logging.getLogger("facilitymind.diagnose")
 
 # 综合诊断置信度低于此值才进 probe 自适应 ReAct；其余直接出诊断
-CONF_THRESHOLD = 0.98
+CONF_THRESHOLD = 0.75
 # 自适应 ReAct 最大轮数（含工具调用 + 重综合）
 PROBE_MAX = 2
 
@@ -135,6 +135,13 @@ def _probe_args(tc: dict, ticket: dict) -> dict:
     return args
 
 
+def _truncate(text: str, n: int = 220) -> str:
+    """日志截断，避免长 JSON 撑爆一行。"""
+    if len(text) <= n:
+        return text
+    return text[: n - 3] + "..."
+
+
 def _build_diag_graph(tools: list):
     """编译 hybrid 子图：并行取证扇出 → 单次综合诊断 → 低置信度进自适应 ReAct。"""
     tool_map = {t.name: t for t in tools}
@@ -188,10 +195,19 @@ def _build_diag_graph(tools: list):
         ticket = state["ticket"]
         msgs = state["messages"]
         probe_iter = state.get("probe_iteration", 0) + 1
+        log.info("[Diagnose][probe][round %d] ▶ 进入 ReAct 循环", probe_iter)
         if client and client.available:
             out = client.complete_with_tools(_PROBE_SYS, _diag_user(ticket, msgs), schemas)
+            thought = (out.get("content") or "").strip()
+            if thought:
+                log.info("[Diagnose][probe][round %d] Thought: %s", probe_iter, _truncate(thought))
             tool_calls = out.get("tool_calls", [])
             if tool_calls and probe_iter < PROBE_MAX:
+                for tc in tool_calls:
+                    log.info(
+                        "[Diagnose][probe][round %d] Action: %s(%s)",
+                        probe_iter, tc["name"], json.dumps(_probe_args(tc, ticket), ensure_ascii=False),
+                    )
                 ai = AIMessage(
                     content=out.get("content", ""),
                     tool_calls=[{"name": tc["name"], "args": _probe_args(tc, ticket), "id": f"probe_{tc['name']}"}
@@ -199,13 +215,37 @@ def _build_diag_graph(tools: list):
                 )
                 return {"messages": [ai], "probe_iteration": probe_iter}
             # 不再调工具或已达上限 → 重新综合
+            log.info("[Diagnose][probe][round %d] 不再调用工具，直接重新综合诊断", probe_iter)
             content = client.complete(_SYNTH_SYS, _diag_user(ticket, msgs))
             parsed = extract_json(content) or {}
             conf = float(parsed.get("confidence", 0.6))
+            log.info("[Diagnose][probe][round %d] Final synthesis 置信度=%.2f", probe_iter, conf)
             return {"messages": [AIMessage(content=content)], "confidence": conf, "probe_iteration": probe_iter}
         # 离线：直接规则收尾
+        log.info("[Diagnose][probe][round %d] 离线模式，直接规则收尾", probe_iter)
         content = _offline_finish(ticket, msgs)
         return {"messages": [AIMessage(content=content)], "confidence": 0.82, "probe_iteration": probe_iter}
+
+    def observe(state: _DiagState):
+        """tools 节点执行后，打印每条工具的 Observation，体现 ReAct 的观察步骤。"""
+        probe_iter = state.get("probe_iteration", 1)
+        # 找到最近一次带 tool_calls 的 AI 消息，其后紧跟的就是这次行动的 Observation
+        ai_idx = None
+        for i in range(len(state["messages"]) - 1, -1, -1):
+            m = state["messages"][i]
+            if isinstance(m, AIMessage) and getattr(m, "tool_calls", None):
+                ai_idx = i
+                break
+        if ai_idx is None:
+            return {}
+        tool_call_ids = {tc["id"] for tc in state["messages"][ai_idx].tool_calls}
+        for m in state["messages"][ai_idx + 1 :]:
+            if isinstance(m, ToolMessage) and m.tool_call_id in tool_call_ids:
+                log.info(
+                    "[Diagnose][probe][round %d] Observation: %s = %s",
+                    probe_iter, m.name, _truncate(m.content),
+                )
+        return {}
 
     def _probe_should_continue(state: _DiagState) -> str:
         if getattr(state["messages"][-1], "tool_calls", None):
@@ -220,6 +260,7 @@ def _build_diag_graph(tools: list):
     g.add_node("synthesize", synthesize)
     g.add_node("probe", probe)
     g.add_node("tools", tool_node)
+    g.add_node("observe", observe)
 
     g.add_edge(START, "fan_out")
     g.add_edge("gather_sensor", "synthesize")
@@ -227,7 +268,8 @@ def _build_diag_graph(tools: list):
     g.add_edge("gather_cases", "synthesize")
     g.add_conditional_edges("synthesize", route_after_synth, {"probe": "probe", END: END})
     g.add_conditional_edges("probe", _probe_should_continue, {"tools": "tools", END: END})
-    g.add_edge("tools", "probe")
+    g.add_edge("tools", "observe")
+    g.add_edge("observe", "probe")
     return g.compile()
 
 
