@@ -20,6 +20,7 @@ TYPE_KEYWORDS: dict[str, list[str]] = {
     "access": ["门禁", "闸机", "道闸", "刷卡", "门打不开"],
     "cleaning": ["保洁", "垃圾", "污渍", "异味"],
     "greening": ["绿化", "草坪", "树木", "花草", "枯死"],
+    "charging": ["充电", "充电桩", "充电枪", "充不进", "充电故障"],
 }
 
 URGENCY_KEYWORDS_HIGH: list[str] = [
@@ -85,6 +86,13 @@ KB: dict[str, dict] = {
         "estimated_cost": 250.0,
         "sla_hours": 24,
     },
+    "charging": {
+        "root_cause": "充电枪座接触不良或配电模块过温保护",
+        "recommended_action": "检查枪座/线缆连接并复位配电模块",
+        "required_skill": "ev_charging",
+        "estimated_cost": 1200.0,
+        "sla_hours": 4,
+    },
 }
 
 # 资源池：技能标签匹配的 vendor。quality 为历史质量分(0~1)，用于性价比排序。
@@ -99,6 +107,7 @@ VENDORS: list[dict] = [
     {"name": "智城门禁运维", "skill": "access_ctrl", "response_min": 50, "cost": 400.0, "quality": 0.86},
     {"name": "净美保洁", "skill": "cleaning", "response_min": 60, "cost": 150.0, "quality": 0.90},
     {"name": "园丁绿化", "skill": "landscape", "response_min": 120, "cost": 250.0, "quality": 0.90},
+    {"name": "特来电充电运维", "skill": "ev_charging", "response_min": 45, "cost": 1200.0, "quality": 0.91},
 ]
 
 # 人工确认阈值：派单报价超过该金额需要人工审批（企业落地常见管控点）。
@@ -115,6 +124,7 @@ QA_CHECKLISTS: dict[str, list[str]] = {
     "access": ["权限变更留痕审计", "读卡器联动测试"],
     "cleaning": ["作业区域围挡提示", "污渍前后对比留痕"],
     "greening": ["用药安全告知", "灌溉水量记录"],
+    "charging": ["断电验电后作业", "绝缘电阻测试合格", "充电枪复位测试", "台账记录闭环"],
 }
 
 

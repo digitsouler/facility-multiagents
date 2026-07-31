@@ -9,7 +9,7 @@ class Ticket(TypedDict):
     """结构化工单，由 Intake 产出。"""
     id: str
     raw: str                 # 原始报修文本
-    type: str                # 故障类型：elevator/hvac/leak/lighting/fire/access/cleaning/greening
+    type: str                # 故障类型：elevator/hvac/leak/lighting/fire/access/cleaning/greening/charging
     urgency: str             # high/medium/low
     location: str            # 位置描述，如 "A座3#梯"
     location_hint: str       # 原始结构化位置提示

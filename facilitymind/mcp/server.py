@@ -49,6 +49,10 @@ SENSOR_DATA: dict[str, list[dict]] = {
         {"asset": "中庭草坪-A", "soil_moist": 12, "pest": True, "status": "异常"},
         {"asset": "中庭草坪-B", "soil_moist": 35, "pest": False, "status": "正常"},
     ],
+    "charging": [
+        {"asset": "B2-充电桩-01", "gun_temp_C": 68, "output_current_A": 0.0, "error_code": "E03过温", "status": "异常"},
+        {"asset": "B2-充电桩-02", "gun_temp_C": 42, "output_current_A": 32.0, "error_code": "无", "status": "正常"},
+    ],
 }
 
 

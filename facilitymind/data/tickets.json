@@ -138,5 +138,12 @@
     "reporter": "绿化养护",
     "type": "greening",
     "location_hint": "园区"
+  },
+  {
+    "id": "T-021",
+    "raw": "地下车库充电桩充不进电，好几辆车都充不上，车主投诉",
+    "reporter": "车场管理员",
+    "type": "charging",
+    "location_hint": "地下车库"
   }
 ]

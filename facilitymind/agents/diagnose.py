@@ -16,7 +16,7 @@ from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 
 from ..dataio import load_tickets
-from ..knowledge import KB
+from ..knowledge import KB, TYPE_KEYWORDS
 from ..llm import extract_json, get_agent_client
 from ..state import Diagnosis, FacilityState
 from ..tools import get_tools_for_agent
@@ -25,10 +25,14 @@ log = logging.getLogger("facilitymind.diagnose")
 
 MAX_ITER = 4
 
+# ReAct 诊断必须按此顺序执行：先取证，再查知识，再召回案例
+TOOL_ORDER = ["read_sensor", "lookup_kb", "recall_cases"]
+
 
 class _DiagState(TypedDict):
     messages: Annotated[list, add_messages]
     ticket: dict
+    iteration: int
 
 
 def _check_recurrence(ticket) -> bool:
@@ -89,17 +93,17 @@ def _tool_content(msgs: list, name: str) -> dict:
     return {}
 
 
-def _offline_ai(msgs: list, ticket: dict) -> AIMessage:
-    """离线脚本化决策：先读传感器拿现场证据，再查知识库，最后召回历史案例，之后收尾。"""
+def _offline_ai(msgs: list, ticket: dict, iteration: int) -> AIMessage:
+    """离线脚本化决策：严格按 TOOL_ORDER 一次只推进一个未调用工具，全部执行完再收尾。"""
     ttype = ticket["type"]
-    called = [m.name for m in msgs if isinstance(m, ToolMessage)]
-    seq = [
-        ("read_sensor", {"fault_type": ttype}),
-        ("lookup_kb", {"fault_type": ttype}),
-        ("recall_cases", {"fault_type": ttype, "location": ticket.get("location", "")}),
-    ]
-    for name, args in seq:
+    called = {m.name for m in msgs if isinstance(m, ToolMessage)}
+    if iteration >= MAX_ITER or all(t in called for t in TOOL_ORDER):
+        return AIMessage(content=_offline_finish(ticket, msgs))
+    for name in TOOL_ORDER:
         if name not in called:
+            args = {"fault_type": ttype}
+            if name == "recall_cases":
+                args["location"] = ticket.get("location", "")
             log.info("[Diagnose][ReAct] 决定(离线) 调 %s(%s)", name, args)
             return AIMessage(content="", tool_calls=[{"name": name, "args": args, "id": f"call_{name}"}])
     return AIMessage(content=_offline_finish(ticket, msgs))
@@ -125,37 +129,67 @@ def _build_diag_graph(tools: list):
     tool_node = ToolNode(tools)
     schemas = _to_schemas(tools)
 
+    def _called_tools(msgs: list) -> set:
+        return {m.name for m in msgs if isinstance(m, ToolMessage)}
+
+    def _pick_one_call(tool_calls: list, called: set, ticket: dict) -> tuple[str, dict] | None:
+        """LLM 可能一次返回多个工具调用，这里过滤已调用过的，并强制按 TOOL_ORDER 取第一个未调用的。"""
+        valid = {tc["name"]: tc["args"] for tc in tool_calls if tc["name"] in TOOL_ORDER}
+        for name in TOOL_ORDER:
+            if name in valid and name not in called:
+                args = dict(valid[name])
+                args["fault_type"] = ticket["type"]  # 防止 LLM 传错类型
+                if name == "recall_cases":
+                    args["location"] = ticket.get("location", "")
+                return name, args
+        return None
+
     def agent_node(state: _DiagState):
         client = get_agent_client("diagnose")
         ticket = state["ticket"]
         msgs = state["messages"]
+        iteration = state.get("iteration", 0) + 1
         ttype = ticket["type"]
+        called = _called_tools(msgs)
+
         sys_prompt = (
             "你是设施管理诊断专家，用 ReAct 工作。\n"
             "可用工具：read_sensor(fault_type)、lookup_kb(fault_type)、recall_cases(fault_type, location)。\n"
-            f"arg 必须用标准化故障类型 '{ttype}'，不要传入报修原文。\n"
-            "建议顺序（证据优先）：1) read_sensor 先读现场传感器取证；2) lookup_kb 查知识库；3) recall_cases 召回历史案例；4) 给出诊断。\n"
+            f"当前工单标准化故障类型是 '{ttype}'，工具参数 fault_type 必须用它。\n"
+            "严格一次只调用一个工具，按顺序执行：1) read_sensor 先读现场传感器取证；2) lookup_kb 查知识库；3) recall_cases 召回历史案例；4) 给出 JSON 诊断。\n"
+            "如果已拿到传感器、知识库、历史案例中的部分信息，就继续下一步，不要重复调用已经调过的工具。\n"
             '最终以 JSON 返回 {"root_cause":"...","recommended_action":"...","confidence":0.0~1.0}。'
         )
+
+        if iteration >= MAX_ITER or all(t in called for t in TOOL_ORDER):
+            log.info("[Diagnose][ReAct] 已达最大迭代或工具已全部调用，强制收尾")
+            content = _offline_finish(ticket, msgs)
+            return {"messages": [AIMessage(content=content)], "iteration": iteration}
+
         if client and client.available:
             out = client.complete_with_tools(sys_prompt, _diag_user(ticket, msgs), schemas)
-            tool_calls = out["tool_calls"]
-            log.info("[Diagnose][ReAct] LLM 决策=%s", tool_calls or "finish")
+            tool_calls = out.get("tool_calls", [])
+            log.info("[Diagnose][ReAct] LLM 原始决策=%s", tool_calls or "finish")
             if tool_calls:
-                ai = AIMessage(
-                    content=out["content"] or "",
-                    tool_calls=[
-                        {"name": tc["name"], "args": tc["args"], "id": f"call_{i}"}
-                        for i, tc in enumerate(tool_calls)
-                    ],
-                )
-            else:
-                ai = AIMessage(content=out["content"] or "")
-        else:
-            ai = _offline_ai(msgs, ticket)
-        return {"messages": [ai]}
+                picked = _pick_one_call(tool_calls, called, ticket)
+                if picked:
+                    name, args = picked
+                    log.info("[Diagnose][ReAct] 强制顺序 调 %s(%s)", name, args)
+                    ai = AIMessage(
+                        content=out.get("content", ""),
+                        tool_calls=[{"name": name, "args": args, "id": f"call_{name}"}],
+                    )
+                    return {"messages": [ai], "iteration": iteration}
+            # LLM 没返回工具调用，或返回的都是已调用过的，直接用其 content 收尾
+            content = out.get("content") or _offline_finish(ticket, msgs)
+            return {"messages": [AIMessage(content=content)], "iteration": iteration}
+
+        ai = _offline_ai(msgs, ticket, iteration)
+        return {"messages": [ai], "iteration": iteration}
 
     def should_continue(state: _DiagState) -> str:
+        if state.get("iteration", 0) >= MAX_ITER:
+            return END
         if getattr(state["messages"][-1], "tool_calls", None):
             return "tools"
         return END
@@ -196,11 +230,28 @@ def diagnose_agent(state: FacilityState) -> dict:
     start = time.time()
     log.info("[Diagnose] ▶ 开始 ticket=%s 类型=%s", ticket["id"], ticket["type"])
 
-    init = {"ticket": ticket, "messages": [HumanMessage(content=_diag_user(ticket, []))]}
+    init = {"ticket": ticket, "messages": [HumanMessage(content=_diag_user(ticket, []))], "iteration": 0}
     result = _DIAG_GRAPH.invoke(init)
     # log.info("[Diagnose] ▶ 调用(工具) result=%s", result)
 
     diag = _parse_diagnosis(ticket, result["messages"][-1].content, result["messages"])
+
+    # 新问题查证：KB 兜底的未知类型（type=cleaning 但原文不含保洁关键词）→ 并行查案例库+口碑给候选
+    looks_unknown = (ticket["type"] == "cleaning") and not any(
+        k in ticket["raw"] for k in TYPE_KEYWORDS["cleaning"]
+    )
+    if looks_unknown or diag.get("confidence", 1.0) < 0.5:
+        from ..memory.qdrant_cases import verify_new_issue
+
+        skill = KB.get(ticket["type"], {}).get("required_skill", "cleaning")
+        verify = verify_new_issue(ticket["raw"], ticket["type"], skill)
+        diag["verify"] = verify
+        log.info(
+            "[Diagnose][Verify] 新问题查证 → 案例=%d 候选商=%d 需人工=%s",
+            len(verify["similar_cases"]),
+            len(verify["candidate_vendors"]),
+            verify["needs_human"],
+        )
 
     log.info(
         "[Diagnose] ✔ 完成 用时=%.2fs 根因=%s；建议=%s；预估¥%.0f；SLA %sh；置信度=%.2f",

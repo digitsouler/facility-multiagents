@@ -14,6 +14,7 @@ import logging
 from langchain_core.tools import tool
 
 from ..knowledge import KB
+from ..memory.qdrant_cases import recall_cases as _qdrant_recall
 
 log = logging.getLogger("facilitymind.tools")
 
@@ -41,9 +42,10 @@ def read_sensor(fault_type: str) -> str:
 
 @tool
 def recall_cases(fault_type: str, location: str = "") -> str:
-    """检索相似历史工单（好案例优先）。当前为本地桩返回空列表；后续接 Qdrant 改成语义检索。"""
-    log.info("[tool] recall_cases(%s, %s) → []", fault_type, location)
-    return json.dumps([], ensure_ascii=False)
+    """检索相似历史工单（好案例优先）。在线走 Qdrant 向量语义检索，离线回退本地 JSONL 关键词。"""
+    cases = _qdrant_recall(fault_type, location, top_k=3, good_only=True)
+    log.info("[tool] recall_cases(%s, %s) → %d 命中", fault_type, location, len(cases))
+    return json.dumps(cases, ensure_ascii=False)
 
 
 _REGISTRY: dict = {

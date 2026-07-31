@@ -14,6 +14,20 @@ from ..state import FacilityState, Ticket
 log = logging.getLogger("facilitymind.intake")
 
 
+# 兼容 LLM 输出中文类型名时映射回系统 key
+_TYPE_LABEL_MAP: dict[str, str] = {
+    "电梯": "elevator",
+    "空调": "hvac",
+    "漏水": "leak",
+    "照明": "lighting",
+    "消防": "fire",
+    "门禁": "access",
+    "保洁": "cleaning",
+    "绿化": "greening",
+    "充电桩": "charging",
+}
+
+
 
 def _guess_location(text: str) -> str:
     """从文本里尽量抽取位置信息，如 'A座3#梯'、'B栋12楼'。"""
@@ -32,8 +46,8 @@ def intake_agent(state: FacilityState) -> dict:
     client = get_agent_client("intake")
     if client.available:
         sys_prompt = (
-            "你是物业工单受理助手。从报修文本中抽取：故障类型(电梯/空调/漏水/照明/"
-            "消防/门禁/保洁/绿化)、紧急程度(high/medium/low)。只返回 JSON："
+            "你是物业工单受理助手。从报修文本中抽取：故障类型(key: elevator/hvac/leak/lighting/"
+            "fire/access/cleaning/greening/charging)、紧急程度(high/medium/low)。只返回 JSON："
             '{"type": "...", "urgency": "..."}。'
         )
         out = client.complete(sys_prompt, raw)
@@ -42,9 +56,10 @@ def intake_agent(state: FacilityState) -> dict:
         if parsed:
             cand_type = str(parsed.get("type", "")).strip().lower()
             cand_urg = str(parsed.get("urgency", "")).strip().lower()
-            # 只在模型输出落在合法枚举内才采纳，否则保留规则值，避免脏数据
-            if cand_type in KB:
-                ttype = cand_type
+            # 优先把中文标签映射回 key，其次匹配已有 key，否则保留规则值
+            mapped = _TYPE_LABEL_MAP.get(cand_type, cand_type)
+            if mapped in KB:
+                ttype = mapped
             if cand_urg in ("high", "medium", "low"):
                 urgency = cand_urg
 

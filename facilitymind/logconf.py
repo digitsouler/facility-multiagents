@@ -18,7 +18,7 @@ def setup_logging(level: int = logging.INFO, log_file: str | None = None) -> Non
 
     fmt = logging.Formatter(
         "%(asctime)s | %(levelname)-7s | %(name)s | %(message)s",
-        datefmt="%H:%M:%S",
+        datefmt="%%Y-%m-%d %H:%M:%S",
     )
 
     root = logging.getLogger("facilitymind")

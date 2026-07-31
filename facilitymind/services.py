@@ -18,6 +18,7 @@ from .knowledge import (
     classify_type,
     classify_urgency,
 )
+from .memory.redis_vendor import vendor_quality, seed as redis_seed, update as redis_update
 
 log = logging.getLogger("facilitymind.services")
 
@@ -32,29 +33,24 @@ def classify_fault(raw: str) -> dict:
 
 
 def rank_vendors(fault_type: str, skill: str) -> list[dict]:
-    """按性价比（成本省+质量高+响应快）对候选维保商排序。"""
+    """按性价比（成本低 + 口碑质量高）排序候选；口碑来自 Redis 历史滚动。"""
+    redis_seed()  # 幂等：首次把 VENDORS 写进 Redis
     cands = [v for v in VENDORS if v["skill"] == skill] or VENDORS
     costs = [v["cost"] for v in cands]
-    resps = [v["response_min"] for v in cands]
     maxc, minc = max(costs), min(costs)
-    maxr, minr = max(resps), min(resps)
 
-    def norm(x, lo, hi):
-        return 0.0 if hi == lo else (hi - x) / (hi - lo)
+    def cost_eff(x):
+        return 0.0 if maxc == minc else (maxc - x) / (maxc - minc)
 
     ranked = []
     for v in cands:
-        score = round(
-            0.5 * norm(v["cost"], minc, maxc)
-            + 0.3 * v.get("quality", 0.9)
-            + 0.2 * norm(v["response_min"], minr, maxr),
-            3,
-        )
+        qual = vendor_quality(v["name"])  # Redis 滚动质量分，冷启动 0.9
+        score = round(0.5 * cost_eff(v["cost"]) + 0.5 * qual, 3)
         ranked.append({
             "name": v["name"],
             "cost": v["cost"],
             "response_min": v["response_min"],
-            "quality": v.get("quality", 0.9),
+            "quality": qual,
             "score": score,
         })
     ranked.sort(key=lambda x: -x["score"])
@@ -148,6 +144,11 @@ def save_case(case: dict) -> dict:
         f.write(json.dumps(case, ensure_ascii=False) + "\n")
     log.info("[service] save_case → %s 已写入", cid)
     return {"saved": True, "case_id": cid}
+
+
+def update_vendor_reputation(ticket_id: str, vendor_name: str, cost: float, qa_passed: bool) -> None:
+    """结案后把处置结果回写 Redis 维保商口碑"""
+    redis_update(ticket_id, vendor_name, cost, qa_passed)
 
 
 def build_qa_checks(ticket: dict, diag: dict, plan: dict, feedback: dict) -> list[dict]:

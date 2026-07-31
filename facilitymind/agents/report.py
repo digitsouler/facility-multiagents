@@ -5,8 +5,10 @@
 """
 
 import logging
+import time
 
-from ..services import save_case
+from ..memory.qdrant_cases import save as qdrant_save
+from ..memory.redis_vendor import update as redis_update
 from ..state import FacilityState, Report
 
 log = logging.getLogger("facilitymind.report")
@@ -56,9 +58,10 @@ def report_agent(state: FacilityState) -> dict:
         },
     }
 
-    # 把本次处置写入本地案例库（好案例复用/坏案例预防的数据底座）
+    # 把本次处置写入案例库（Qdrant 向量 + 本地 JSONL 双写；好/坏都存，坏案例供预防检索）
     case = {
         "ticket_id": ticket["id"],
+        "case_id": f"CASE-{ticket['id']}",
         "type": ticket["type"],
         "location": ticket.get("location", ""),
         "root_cause": diag["root_cause"],
@@ -67,10 +70,14 @@ def report_agent(state: FacilityState) -> dict:
         "cost": plan["cost"],
         "qa_passed": qa_passed,
         "qa_score": qa.get("score", 0.0),
+        "outcome": "good" if qa_passed else "bad",
         "recurrence": diag.get("recurrence", False),
         "recommendations": recs,
+        "created_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
     }
-    saved = save_case(case)
+    saved = qdrant_save(case)
+    # 回写维保商口碑（Redis 滚动质量/成本）
+    redis_update(ticket["id"], plan["vendor"], plan["cost"], qa_passed)
     log.info("[Report] %s 案例落库=%s", summary, saved.get("case_id"))
 
     return {"report": report, "messages": [{"role": "system", "content": summary}]}
