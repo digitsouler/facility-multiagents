@@ -1,4 +1,4 @@
-<svg viewBox="0 0 680 440" xmlns="http://www.w3.org/2000/svg" role="img">
+<svg viewBox="0 0 680 420" xmlns="http://www.w3.org/2000/svg" role="img">
   <title>FacilityMind 三种编排模式</title>
   <desc>串行骨干、并行取证、主管路由三种 LangGraph 编排策略</desc>
   <defs>
@@ -51,19 +51,8 @@
   <line x1="508" y1="262" x2="540" y2="262" stroke="#993C1D" stroke-width="0.8" stroke-dasharray="3,2" marker-end="url(#os)"/>
   <g class="node c-gray"><rect x="544" y="248" width="58" height="38" rx="6" fill="#F1EFE8" stroke="#888780" stroke-width="0.5"/><text x="573" y="267" text-anchor="middle" dominant-baseline="central" class="ts" fill="#2C2C2A">安防</text></g>
 
+  <!-- Recommendation box -->
   <rect x="40" y="306" width="600" height="56" rx="10" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.4"/>
   <text x="340" y="328" text-anchor="middle" class="th" fill="#26215C" style="font-size:13px">推荐组合：中心路由(场景) → 串行主干(生命周期) → 节点内并行取证</text>
   <text x="340" y="350" text-anchor="middle" class="ts" fill="#3C3489">本阶段实现：串行主干 + 回传节点；并行取证待 IoT 接入；主管路由随多场景扩展启用</text>
-
-  <rect x="40" y="380" width="600" height="46" rx="8" fill="#F1EFE8" stroke="#B4B2A9" stroke-width="0.3"/>
-  <text x="60" y="400" class="ts" fill="#444441">引擎:</text>
-  <text x="95" y="400" class="ts" fill="#185FA5">LangGraph StateGraph</text>
-  <text x="210" y="400" class="ts" fill="#444441">| 记忆:</text>
-  <text x="245" y="400" class="ts" fill="#0F6E56">Qdrant</text>
-  <text x="290" y="400" class="ts" fill="#993C1D">Redis</text>
-  <text x="330" y="400" class="ts" fill="#444441">| 模型:</text>
-  <text x="365" y="400" class="ts" fill="#534AB7">DeepSeek / Qwen / GLM</text>
-  <text x="520" y="400" class="ts" fill="#444441">| 向量:</text>
-  <text x="555" y="400" class="ts" fill="#0F6E56">Embedding-3</text>
-  <text x="340" y="418" text-anchor="middle" class="ts" fill="#5F5E5A">Python + FastAPI / Vue3 前端 | MCP Server 可扩展</text>
 </svg>

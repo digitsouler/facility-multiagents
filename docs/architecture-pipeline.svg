@@ -28,7 +28,7 @@
   <line x1="130" y1="336" x2="130" y2="348" stroke="#888780" stroke-width="1.5" marker-end="url(#a1)"/>
   <line x1="130" y1="396" x2="130" y2="408" stroke="#888780" stroke-width="1.5" marker-end="url(#a1)"/>
 
-  <!-- Memory systems (right side) -->
+  <!-- Memory systems -->
   <g class="node c-red"><rect x="480" y="52" width="170" height="44" rx="8" fill="#FCEBEB" stroke="#A32D2D" stroke-width="0.5"/><text x="565" y="74" text-anchor="middle" dominant-baseline="central" class="th" fill="#501313">新问题查证 → 人工</text></g>
   <g class="node c-amber"><rect x="480" y="132" width="170" height="52" rx="8" fill="#FAEEDA" stroke="#854F0B" stroke-width="0.5"/><text x="565" y="152" text-anchor="middle" dominant-baseline="central" class="th" fill="#412402">Redis 口碑分</text><text x="565" y="170" text-anchor="middle" dominant-baseline="central" class="ts" fill="#633806">reputation 实时算</text></g>
   <g class="node c-teal"><rect x="480" y="212" width="170" height="52" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/><text x="565" y="232" text-anchor="middle" dominant-baseline="central" class="th" fill="#04342C">Qdrant 案例库</text><text x="565" y="250" text-anchor="middle" dominant-baseline="central" class="ts" fill="#085041">好/坏案例向量</text></g>
@@ -36,7 +36,7 @@
 
   <!-- Feedback arrows -->
   <path d="M200 64 Q 340 54 476 68" fill="none" stroke="#A32D2D" stroke-width="0.8" stroke-dasharray="4,3" marker-end="url(#a2)"/>
-  <text x="330" y="56" text-anchor="middle" class="ts" fill="#993556">KB 缺失 → 查证</text>
+  <text x="330" y="56" text-anchor="middle" class="ts" fill="#993556">知识库缺失 → 查证</text>
   <path d="M200 128 Q 350 100 476 148" fill="none" stroke="#993C1D" stroke-width="0.8" stroke-dasharray="4,3" marker-end="url(#a5)"/>
   <text x="340" y="112" text-anchor="middle" class="ts" fill="#993C1D">性价比排序</text>
   <path d="M480 172 Q 340 180 204 140" fill="none" stroke="#993C1D" stroke-width="0.8" stroke-dasharray="4,3" marker-end="url(#a5)"/>
