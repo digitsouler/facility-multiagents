@@ -1,0 +1,69 @@
+<svg viewBox="0 0 680 440" xmlns="http://www.w3.org/2000/svg" role="img">
+  <title>FacilityMind 三种编排模式</title>
+  <desc>串行骨干、并行取证、主管路由三种 LangGraph 编排策略</desc>
+  <defs>
+    <marker id="oa" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M2 1L8 5L2 9" fill="none" stroke="#888780" stroke-width="1.2" stroke-linecap="round"/></marker>
+    <marker id="op" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M2 1L8 5L2 9" fill="none" stroke="#185FA5" stroke-width="1.2" stroke-linecap="round"/></marker>
+    <marker id="os" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M2 1L8 5L2 9" fill="none" stroke="#993C1D" stroke-width="1.2" stroke-linecap="round"/></marker>
+  </defs>
+
+  <text x="340" y="24" text-anchor="middle" class="th" style="font-size:15px">三种编排模式 (LangGraph StateGraph)</text>
+
+  <!-- Pattern 1: Serial Backbone -->
+  <text x="40" y="56" class="th" fill="#042C53" style="font-size:13px">1 串行骨干 — 主链路强依赖，StateGraph 线性边</text>
+  <g class="node c-blue"><rect x="40" y="68" width="72" height="36" rx="6" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/><text x="76" y="86" text-anchor="middle" dominant-baseline="central" class="ts" fill="#042C53">Intake</text></g>
+  <line x1="112" y1="86" x2="128" y2="86" stroke="#888780" stroke-width="1.2" marker-end="url(#oa)"/>
+  <g class="node c-blue"><rect x="132" y="68" width="80" height="36" rx="6" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/><text x="172" y="86" text-anchor="middle" dominant-baseline="central" class="ts" fill="#042C53">Diagnose</text></g>
+  <line x1="212" y1="86" x2="228" y2="86" stroke="#888780" stroke-width="1.2" marker-end="url(#oa)"/>
+  <g class="node c-blue"><rect x="232" y="68" width="78" height="36" rx="6" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/><text x="271" y="86" text-anchor="middle" dominant-baseline="central" class="ts" fill="#042C53">Dispatch</text></g>
+  <line x1="310" y1="86" x2="326" y2="86" stroke="#888780" stroke-width="1.2" marker-end="url(#oa)"/>
+  <g class="node c-amber"><rect x="330" y="68" width="78" height="36" rx="6" fill="#FAEEDA" stroke="#854F0B" stroke-width="0.5"/><text x="369" y="86" text-anchor="middle" dominant-baseline="central" class="ts" fill="#412402">Approval</text></g>
+  <line x1="408" y1="86" x2="424" y2="86" stroke="#888780" stroke-width="1.2" marker-end="url(#oa)"/>
+  <g class="node c-amber"><rect x="428" y="68" width="52" height="36" rx="6" fill="#FAEEDA" stroke="#854F0B" stroke-width="0.5"/><text x="454" y="86" text-anchor="middle" dominant-baseline="central" class="ts" fill="#412402">回传</text></g>
+  <line x1="480" y1="86" x2="496" y2="86" stroke="#888780" stroke-width="1.2" marker-end="url(#oa)"/>
+  <g class="node c-amber"><rect x="500" y="68" width="42" height="36" rx="6" fill="#FAEEDA" stroke="#854F0B" stroke-width="0.5"/><text x="521" y="86" text-anchor="middle" dominant-baseline="central" class="ts" fill="#412402">QA</text></g>
+  <line x1="542" y1="86" x2="558" y2="86" stroke="#888780" stroke-width="1.2" marker-end="url(#oa)"/>
+  <g class="node c-green"><rect x="562" y="68" width="64" height="36" rx="6" fill="#EAF3DE" stroke="#3B6D11" stroke-width="0.5"/><text x="594" y="86" text-anchor="middle" dominant-baseline="central" class="ts" fill="#173404">Report</text></g>
+
+  <!-- Pattern 2: Parallel Verification -->
+  <text x="40" y="144" class="th" fill="#042C53" style="font-size:13px">2 并行取证 — 节点内 Send() 并发，reducer 汇合</text>
+  <g class="node c-purple"><rect x="40" y="158" width="82" height="38" rx="6" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/><text x="81" y="177" text-anchor="middle" dominant-baseline="central" class="ts" fill="#26215C">Diagnose</text></g>
+  <line x1="122" y1="170" x2="148" y2="170" stroke="#185FA5" stroke-width="1" stroke-dasharray="3,2" marker-end="url(#op)"/>
+  <g class="node c-coral"><rect x="152" y="156" width="90" height="38" rx="6" fill="#FAECE7" stroke="#993C1D" stroke-width="0.5"/><text x="197" y="175" text-anchor="middle" dominant-baseline="central" class="ts" fill="#4A1B0C">IoT 传感器</text></g>
+  <line x1="242" y1="170" x2="268" y2="170" stroke="#185FA5" stroke-width="1" stroke-dasharray="3,2" marker-end="url(#op)"/>
+  <g class="node c-teal"><rect x="272" y="156" width="84" height="38" rx="6" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/><text x="314" y="175" text-anchor="middle" dominant-baseline="central" class="ts" fill="#04342C">故障知识库</text></g>
+  <line x1="356" y1="170" x2="382" y2="170" stroke="#185FA5" stroke-width="1" stroke-dasharray="3,2" marker-end="url(#op)"/>
+  <g class="node c-amber"><rect x="386" y="156" width="90" height="38" rx="6" fill="#FAEEDA" stroke="#854F0B" stroke-width="0.5"/><text x="431" y="175" text-anchor="middle" dominant-baseline="central" class="ts" fill="#412402">维保商检索</text></g>
+  <line x1="476" y1="170" x2="508" y2="170" stroke="#185FA5" stroke-width="1" stroke-dasharray="3,2" marker-end="url(#op)"/>
+  <g class="node c-green"><rect x="512" y="156" width="60" height="38" rx="6" fill="#EAF3DE" stroke="#3B6D11" stroke-width="0.5"/><text x="542" y="175" text-anchor="middle" dominant-baseline="central" class="ts" fill="#173404">汇合</text></g>
+
+  <!-- Pattern 3: Supervisor Routing -->
+  <text x="40" y="232" class="th" fill="#042C53" style="font-size:13px">3 主管路由 — Intake 前接 Supervisor 分流场景（中心只路由）</text>
+  <g class="node c-red"><rect x="40" y="248" width="92" height="38" rx="6" fill="#FCEBEB" stroke="#A32D2D" stroke-width="0.5"/><text x="86" y="267" text-anchor="middle" dominant-baseline="central" class="ts" fill="#501313">Supervisor</text></g>
+  <line x1="132" y1="262" x2="164" y2="262" stroke="#993C1D" stroke-width="0.8" stroke-dasharray="3,2" marker-end="url(#os)"/>
+  <g class="node c-gray"><rect x="168" y="248" width="58" height="38" rx="6" fill="#F1EFE8" stroke="#888780" stroke-width="0.5"/><text x="197" y="267" text-anchor="middle" dominant-baseline="central" class="ts" fill="#2C2C2A">电梯</text></g>
+  <line x1="226" y1="262" x2="258" y2="262" stroke="#993C1D" stroke-width="0.8" stroke-dasharray="3,2" marker-end="url(#os)"/>
+  <g class="node c-gray"><rect x="262" y="248" width="58" height="38" rx="6" fill="#F1EFE8" stroke="#888780" stroke-width="0.5"/><text x="291" y="267" text-anchor="middle" dominant-baseline="central" class="ts" fill="#2C2C2A">暖通</text></g>
+  <line x1="320" y1="262" x2="352" y2="262" stroke="#993C1D" stroke-width="0.8" stroke-dasharray="3,2" marker-end="url(#os)"/>
+  <g class="node c-gray"><rect x="356" y="248" width="58" height="38" rx="6" fill="#F1EFE8" stroke="#888780" stroke-width="0.5"/><text x="385" y="267" text-anchor="middle" dominant-baseline="central" class="ts" fill="#2C2C2A">清洁</text></g>
+  <line x1="414" y1="262" x2="446" y2="262" stroke="#993C1D" stroke-width="0.8" stroke-dasharray="3,2" marker-end="url(#os)"/>
+  <g class="node c-gray"><rect x="450" y="248" width="58" height="38" rx="6" fill="#F1EFE8" stroke="#888780" stroke-width="0.5"/><text x="479" y="267" text-anchor="middle" dominant-baseline="central" class="ts" fill="#2C2C2A">能耗</text></g>
+  <line x1="508" y1="262" x2="540" y2="262" stroke="#993C1D" stroke-width="0.8" stroke-dasharray="3,2" marker-end="url(#os)"/>
+  <g class="node c-gray"><rect x="544" y="248" width="58" height="38" rx="6" fill="#F1EFE8" stroke="#888780" stroke-width="0.5"/><text x="573" y="267" text-anchor="middle" dominant-baseline="central" class="ts" fill="#2C2C2A">安防</text></g>
+
+  <rect x="40" y="306" width="600" height="56" rx="10" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.4"/>
+  <text x="340" y="328" text-anchor="middle" class="th" fill="#26215C" style="font-size:13px">推荐组合：中心路由(场景) → 串行主干(生命周期) → 节点内并行取证</text>
+  <text x="340" y="350" text-anchor="middle" class="ts" fill="#3C3489">本阶段实现：串行主干 + 回传节点；并行取证待 IoT 接入；主管路由随多场景扩展启用</text>
+
+  <rect x="40" y="380" width="600" height="46" rx="8" fill="#F1EFE8" stroke="#B4B2A9" stroke-width="0.3"/>
+  <text x="60" y="400" class="ts" fill="#444441">引擎:</text>
+  <text x="95" y="400" class="ts" fill="#185FA5">LangGraph StateGraph</text>
+  <text x="210" y="400" class="ts" fill="#444441">| 记忆:</text>
+  <text x="245" y="400" class="ts" fill="#0F6E56">Qdrant</text>
+  <text x="290" y="400" class="ts" fill="#993C1D">Redis</text>
+  <text x="330" y="400" class="ts" fill="#444441">| 模型:</text>
+  <text x="365" y="400" class="ts" fill="#534AB7">DeepSeek / Qwen / GLM</text>
+  <text x="520" y="400" class="ts" fill="#444441">| 向量:</text>
+  <text x="555" y="400" class="ts" fill="#0F6E56">Embedding-3</text>
+  <text x="340" y="418" text-anchor="middle" class="ts" fill="#5F5E5A">Python + FastAPI / Vue3 前端 | MCP Server 可扩展</text>
+</svg>
