@@ -1,8 +1,11 @@
-"""Diagnose Agent：用 ReAct 子图（agent → ToolNode → should_continue）做根因诊断。
+"""Diagnose Agent：hybrid 诊断（并行取证 + 条件 ReAct）。
 
-工具来自 tools 注册中心（lookup_kb / read_sensor / recall_cases），经 ToolNode 执行；
-在线模式由 LLM 决定每步调用哪个工具，离线模式走脚本化序列，二者共用同一套 @tool。
-循环靠 should_continue（无 tool_calls 即终止）+ MAX_ITER 控制，不会无限转圈。
+- 固定的三类取证（read_sensor / lookup_kb / recall_cases）彼此独立、无依赖，用
+  LangGraph `Send()` 一次性并行扇出，再由 `synthesize` 做一次综合诊断（省掉原本
+  每步一次的 LLM 决策调用，token 明显下降）。
+- 仅在综合诊断置信度偏低（< CONF_THRESHOLD）时，才进入 `probe` 自适应 ReAct 子循环
+  （最多 PROBE_MAX 轮）补充取证/重新推理；其余情况直接出诊断。
+- 在线无 Key 时走规则兜底（_offline_finish），并行取证的三类工具本身不依赖 LLM。
 """
 
 import json
@@ -11,9 +14,10 @@ import time
 from typing import Annotated, TypedDict
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
-from langgraph.graph import END, StateGraph
+from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
+from langgraph.types import Command, Send
 
 from ..dataio import load_tickets
 from ..knowledge import KB, TYPE_KEYWORDS
@@ -23,16 +27,30 @@ from ..tools import get_tools_for_agent
 
 log = logging.getLogger("facilitymind.diagnose")
 
-MAX_ITER = 4
+# 综合诊断置信度低于此值才进 probe 自适应 ReAct；其余直接出诊断
+CONF_THRESHOLD = 0.98
+# 自适应 ReAct 最大轮数（含工具调用 + 重综合）
+PROBE_MAX = 2
 
-# ReAct 诊断必须按此顺序执行：先取证，再查知识，再召回案例
-TOOL_ORDER = ["read_sensor", "lookup_kb", "recall_cases"]
+_SYNTH_SYS = (
+    "你是设施管理诊断专家。已为你准备好三类证据：IoT 传感器实时读数、故障知识库、"
+    "历史相似案例。请综合判断根因并给出处置建议。\n"
+    '以 JSON 返回 {"root_cause":"...","recommended_action":"...","confidence":0.0~1.0}。\n'
+    "若证据矛盾（如传感器显示正常但业主报修异常），请在根因中说明并给出合理推断。"
+)
+
+_PROBE_SYS = (
+    "你是设施管理诊断专家。上一轮综合诊断置信度偏低，需要重新审查证据。\n"
+    "你可继续调用工具补充取证（read_sensor/lookup_kb/recall_cases），然后重新给出 JSON 诊断：\n"
+    '{"root_cause":"...","recommended_action":"...","confidence":0.0~1.0}。'
+)
 
 
 class _DiagState(TypedDict):
     messages: Annotated[list, add_messages]
     ticket: dict
-    iteration: int
+    confidence: float
+    probe_iteration: int
 
 
 def _check_recurrence(ticket) -> bool:
@@ -93,22 +111,6 @@ def _tool_content(msgs: list, name: str) -> dict:
     return {}
 
 
-def _offline_ai(msgs: list, ticket: dict, iteration: int) -> AIMessage:
-    """离线脚本化决策：严格按 TOOL_ORDER 一次只推进一个未调用工具，全部执行完再收尾。"""
-    ttype = ticket["type"]
-    called = {m.name for m in msgs if isinstance(m, ToolMessage)}
-    if iteration >= MAX_ITER or all(t in called for t in TOOL_ORDER):
-        return AIMessage(content=_offline_finish(ticket, msgs))
-    for name in TOOL_ORDER:
-        if name not in called:
-            args = {"fault_type": ttype}
-            if name == "recall_cases":
-                args["location"] = ticket.get("location", "")
-            log.info("[Diagnose][ReAct] 决定(离线) 调 %s(%s)", name, args)
-            return AIMessage(content="", tool_calls=[{"name": name, "args": args, "id": f"call_{name}"}])
-    return AIMessage(content=_offline_finish(ticket, msgs))
-
-
 def _offline_finish(ticket: dict, msgs: list) -> str:
     ttype = ticket["type"]
     kb = dict(KB.get(ttype, KB["cleaning"]))
@@ -124,82 +126,108 @@ def _offline_finish(ticket: dict, msgs: list) -> str:
     )
 
 
+def _probe_args(tc: dict, ticket: dict) -> dict:
+    """修正 LLM 可能传错的参数：强制 fault_type 用标准 key，recall_cases 补 location。"""
+    args = dict(tc.get("args", {}))
+    args["fault_type"] = ticket["type"]
+    if tc["name"] == "recall_cases":
+        args["location"] = ticket.get("location", "")
+    return args
+
+
 def _build_diag_graph(tools: list):
-    """编译 ReAct 子图：agent 决定下一步（tool_calls 或最终诊断），ToolNode 执行工具。"""
+    """编译 hybrid 子图：并行取证扇出 → 单次综合诊断 → 低置信度进自适应 ReAct。"""
+    tool_map = {t.name: t for t in tools}
     tool_node = ToolNode(tools)
     schemas = _to_schemas(tools)
 
-    def _called_tools(msgs: list) -> set:
-        return {m.name for m in msgs if isinstance(m, ToolMessage)}
+    def _gather(name: str, args: dict, call_id: str) -> ToolMessage:
+        out = tool_map[name].invoke(args)
+        return ToolMessage(content=out, name=name, tool_call_id=call_id)
 
-    def _pick_one_call(tool_calls: list, called: set, ticket: dict) -> tuple[str, dict] | None:
-        """LLM 可能一次返回多个工具调用，这里过滤已调用过的，并强制按 TOOL_ORDER 取第一个未调用的。"""
-        valid = {tc["name"]: tc["args"] for tc in tool_calls if tc["name"] in TOOL_ORDER}
-        for name in TOOL_ORDER:
-            if name in valid and name not in called:
-                args = dict(valid[name])
-                args["fault_type"] = ticket["type"]  # 防止 LLM 传错类型
-                if name == "recall_cases":
-                    args["location"] = ticket.get("location", "")
-                return name, args
-        return None
+    def fan_out(state: _DiagState) -> Command:
+        # 三个取证工具相互独立，并行扇出（LangGraph 同一 super-step 内并发执行）
+        return Command(goto=[
+            Send("gather_sensor", state),
+            Send("gather_kb", state),
+            Send("gather_cases", state),
+        ])
 
-    def agent_node(state: _DiagState):
+    def gather_sensor(state: _DiagState):
+        return {"messages": [_gather("read_sensor", {"fault_type": state["ticket"]["type"]}, "sensor")]}
+
+    def gather_kb(state: _DiagState):
+        return {"messages": [_gather("lookup_kb", {"fault_type": state["ticket"]["type"]}, "kb")]}
+
+    def gather_cases(state: _DiagState):
+        loc = state["ticket"].get("location", "")
+        return {"messages": [_gather("recall_cases", {"fault_type": state["ticket"]["type"], "location": loc}, "cases")]}
+
+    def synthesize(state: _DiagState):
+        ticket = state["ticket"]
+        client = get_agent_client("diagnose")
+        if client and client.available:
+            content = client.complete(_SYNTH_SYS, _diag_user(ticket, state["messages"]))
+            parsed = extract_json(content) or {}
+            conf = float(parsed.get("confidence", 0.82))
+        else:
+            content = _offline_finish(ticket, state["messages"])
+            conf = 0.9 if _check_recurrence(ticket) else 0.82
+        log.info("[Diagnose][hybrid] 综合诊断 置信度=%.2f", conf)
+        return {"messages": [AIMessage(content=content)], "confidence": conf}
+
+    def route_after_synth(state: _DiagState) -> str:
+        if state.get("probe_iteration", 0) >= PROBE_MAX:
+            return END
+        if state.get("confidence", 1.0) >= CONF_THRESHOLD:
+            return END
+        return "probe"
+
+    def probe(state: _DiagState):
         client = get_agent_client("diagnose")
         ticket = state["ticket"]
         msgs = state["messages"]
-        iteration = state.get("iteration", 0) + 1
-        ttype = ticket["type"]
-        called = _called_tools(msgs)
-
-        sys_prompt = (
-            "你是设施管理诊断专家，用 ReAct 工作。\n"
-            "可用工具：read_sensor(fault_type)、lookup_kb(fault_type)、recall_cases(fault_type, location)。\n"
-            f"当前工单标准化故障类型是 '{ttype}'，工具参数 fault_type 必须用它。\n"
-            "严格一次只调用一个工具，按顺序执行：1) read_sensor 先读现场传感器取证；2) lookup_kb 查知识库；3) recall_cases 召回历史案例；4) 给出 JSON 诊断。\n"
-            "如果已拿到传感器、知识库、历史案例中的部分信息，就继续下一步，不要重复调用已经调过的工具。\n"
-            '最终以 JSON 返回 {"root_cause":"...","recommended_action":"...","confidence":0.0~1.0}。'
-        )
-
-        if iteration >= MAX_ITER or all(t in called for t in TOOL_ORDER):
-            log.info("[Diagnose][ReAct] 已达最大迭代或工具已全部调用，强制收尾")
-            content = _offline_finish(ticket, msgs)
-            return {"messages": [AIMessage(content=content)], "iteration": iteration}
-
+        probe_iter = state.get("probe_iteration", 0) + 1
         if client and client.available:
-            out = client.complete_with_tools(sys_prompt, _diag_user(ticket, msgs), schemas)
+            out = client.complete_with_tools(_PROBE_SYS, _diag_user(ticket, msgs), schemas)
             tool_calls = out.get("tool_calls", [])
-            log.info("[Diagnose][ReAct] LLM 原始决策=%s", tool_calls or "finish")
-            if tool_calls:
-                picked = _pick_one_call(tool_calls, called, ticket)
-                if picked:
-                    name, args = picked
-                    log.info("[Diagnose][ReAct] 强制顺序 调 %s(%s)", name, args)
-                    ai = AIMessage(
-                        content=out.get("content", ""),
-                        tool_calls=[{"name": name, "args": args, "id": f"call_{name}"}],
-                    )
-                    return {"messages": [ai], "iteration": iteration}
-            # LLM 没返回工具调用，或返回的都是已调用过的，直接用其 content 收尾
-            content = out.get("content") or _offline_finish(ticket, msgs)
-            return {"messages": [AIMessage(content=content)], "iteration": iteration}
+            if tool_calls and probe_iter < PROBE_MAX:
+                ai = AIMessage(
+                    content=out.get("content", ""),
+                    tool_calls=[{"name": tc["name"], "args": _probe_args(tc, ticket), "id": f"probe_{tc['name']}"}
+                                for tc in tool_calls],
+                )
+                return {"messages": [ai], "probe_iteration": probe_iter}
+            # 不再调工具或已达上限 → 重新综合
+            content = client.complete(_SYNTH_SYS, _diag_user(ticket, msgs))
+            parsed = extract_json(content) or {}
+            conf = float(parsed.get("confidence", 0.6))
+            return {"messages": [AIMessage(content=content)], "confidence": conf, "probe_iteration": probe_iter}
+        # 离线：直接规则收尾
+        content = _offline_finish(ticket, msgs)
+        return {"messages": [AIMessage(content=content)], "confidence": 0.82, "probe_iteration": probe_iter}
 
-        ai = _offline_ai(msgs, ticket, iteration)
-        return {"messages": [ai], "iteration": iteration}
-
-    def should_continue(state: _DiagState) -> str:
-        if state.get("iteration", 0) >= MAX_ITER:
-            return END
+    def _probe_should_continue(state: _DiagState) -> str:
         if getattr(state["messages"][-1], "tool_calls", None):
             return "tools"
         return END
 
     g = StateGraph(_DiagState)
-    g.add_node("agent", agent_node)
+    g.add_node("fan_out", fan_out)
+    g.add_node("gather_sensor", gather_sensor)
+    g.add_node("gather_kb", gather_kb)
+    g.add_node("gather_cases", gather_cases)
+    g.add_node("synthesize", synthesize)
+    g.add_node("probe", probe)
     g.add_node("tools", tool_node)
-    g.add_conditional_edges("agent", should_continue, {"tools": "tools", END: END})
-    g.add_edge("tools", "agent")
-    g.set_entry_point("agent")
+
+    g.add_edge(START, "fan_out")
+    g.add_edge("gather_sensor", "synthesize")
+    g.add_edge("gather_kb", "synthesize")
+    g.add_edge("gather_cases", "synthesize")
+    g.add_conditional_edges("synthesize", route_after_synth, {"probe": "probe", END: END})
+    g.add_conditional_edges("probe", _probe_should_continue, {"tools": "tools", END: END})
+    g.add_edge("tools", "probe")
     return g.compile()
 
 
@@ -230,9 +258,13 @@ def diagnose_agent(state: FacilityState) -> dict:
     start = time.time()
     log.info("[Diagnose] ▶ 开始 ticket=%s 类型=%s", ticket["id"], ticket["type"])
 
-    init = {"ticket": ticket, "messages": [HumanMessage(content=_diag_user(ticket, []))], "iteration": 0}
+    init = {
+        "ticket": ticket,
+        "messages": [HumanMessage(content=_diag_user(ticket, []))],
+        "confidence": 1.0,
+        "probe_iteration": 0,
+    }
     result = _DIAG_GRAPH.invoke(init)
-    # log.info("[Diagnose] ▶ 调用(工具) result=%s", result)
 
     diag = _parse_diagnosis(ticket, result["messages"][-1].content, result["messages"])
 

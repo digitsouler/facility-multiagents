@@ -168,3 +168,380 @@
 10:08:16 | INFO    | facilitymind.graph | [Report] ▶ 进入
 10:08:16 | INFO    | facilitymind.report | [Report] 工单 T-003（hvac / 紧急度 high）于 2026-07-30T10:08:16 经 system 处置，根因为「空调制冷系统故障，可能原因包括制冷剂泄漏、压缩机故障或冷凝器散热不良」，由 美的暖通服务 完成，报价 ¥800，质检通过。
 10:08:16 | INFO    | facilitymind.graph | [Report] ✔ 完成 用时=0.00s
+2026-07-31 10:58:21 | INFO    | facilitymind.graph | [Intake] ▶ 进入
+2026-07-31 10:58:21 | INFO    | facilitymind.services | [service] classify_fault → {'type': 'elevator', 'urgency': 'high'}
+2026-07-31 10:58:21 | INFO    | facilitymind.llm | [LLM:qwen] ▶ 调用 model=qwen3.7-plus
+2026-07-31 10:58:26 | INFO    | facilitymind.llm | [LLM:qwen] ✔ 完成 304 tokens
+2026-07-31 10:58:26 | INFO    | facilitymind.intake | [Intake] LLM 输出={"type": "elevator", "urgency": "high"}
+2026-07-31 10:58:26 | INFO    | facilitymind.graph | [Intake] ✔ 完成 用时=5.83s
+2026-07-31 10:58:26 | INFO    | facilitymind.graph | [Diagnose] ▶ 进入
+2026-07-31 10:58:26 | INFO    | facilitymind.diagnose | [Diagnose] ▶ 开始 ticket=T-001 类型=elevator
+2026-07-31 10:58:26 | INFO    | facilitymind.tools | [tool] lookup_kb(elevator) → ['root_cause', 'recommended_action', 'required_skill', 'estimated_cost', 'sla_hours']
+2026-07-31 10:58:29 | INFO    | facilitymind.memory.qdrant | [qdrant] 连接成功，集合=facility_cases
+2026-07-31 10:58:29 | INFO    | facilitymind.tools | [tool] read_sensor(elevator) 来源=mcp 行数=2 → [{'asset': 'A座3#梯', 'door_current_A': 28.5, 'vibration_mm_s': 4.2, 'cage_temp_C': 31.0, 'status': '异常'}, {'asset': 'B座1#梯', 'door_current_A': 12.1, 'vibration_mm_s': 1.1, 'cage_temp_C': 28.0, 'status': '正常'}]
+2026-07-31 10:58:30 | INFO    | facilitymind.memory.qdrant | [qdrant] recall(elevator) 向量命中 1
+2026-07-31 10:58:30 | INFO    | facilitymind.tools | [tool] recall_cases(elevator, A座3#梯) → 1 命中
+2026-07-31 10:58:30 | INFO    | facilitymind.llm | [LLM:deepseek] ▶ 调用 model=deepseek-chat
+2026-07-31 10:58:32 | INFO    | facilitymind.llm | [LLM:deepseek] ✔ 完成 556 tokens
+2026-07-31 10:58:32 | INFO    | facilitymind.diagnose | [Diagnose][hybrid] 综合诊断 置信度=0.95
+2026-07-31 10:58:32 | INFO    | facilitymind.diagnose | [Diagnose] ✔ 完成 用时=5.60s 根因=门机控制器接触不良或光幕遮挡；建议=立即派持证电梯维保人员（elevator_maint）赶赴现场，优先手动开门解救被困人员；随后更换门机控制器并校准光幕，测试正常后恢复运行。；预估¥2400；SLA 2h；置信度=0.95
+2026-07-31 10:58:32 | INFO    | facilitymind.graph | [Diagnose] ✔ 完成 用时=5.60s
+2026-07-31 10:58:32 | INFO    | facilitymind.graph | [Dispatch] ▶ 进入
+2026-07-31 10:58:32 | INFO    | facilitymind.memory.redis | [redis] 连接成功 db=2
+2026-07-31 10:58:32 | INFO    | facilitymind.memory.redis | [redis] seed 完成，维保商数=11
+2026-07-31 10:58:32 | INFO    | facilitymind.services | [service] rank_vendors(elevator,elevator_maint) → [('迅达电梯维保', 1.0), ('日立电梯急修', 0.45)]
+2026-07-31 10:58:32 | INFO    | facilitymind.llm | [LLM:zhipu] ▶ 调用 model=glm-5.2
+2026-07-31 10:58:41 | INFO    | facilitymind.llm | [LLM:zhipu] ✔ 完成 589 tokens
+2026-07-31 10:58:41 | INFO    | facilitymind.dispatch | [Dispatch] 派单 → 迅达电梯维保（响应30分钟 / ¥2400）：按性价比排序，迅达电梯维保 得分最高（成本¥2400 / 质量1.0 / 响应30分钟）
+2026-07-31 10:58:41 | INFO    | facilitymind.graph | [Dispatch] ✔ 完成 用时=9.06s
+2026-07-31 10:58:41 | INFO    | facilitymind.graph | [Approval] ▶ 进入
+2026-07-31 10:58:41 | INFO    | facilitymind.services | [service] check_budget(¥2400) → 需人工=True (阈值¥2000)
+2026-07-31 10:58:41 | INFO    | facilitymind.graph | [Approval] ✔ 完成 用时=0.00s
+2026-07-31 10:58:41 | INFO    | facilitymind.graph | [TechnicianReport] ▶ 进入
+2026-07-31 10:58:41 | INFO    | facilitymind.services | [service] validate_evidence → 缺失=[]
+2026-07-31 10:58:41 | INFO    | facilitymind.graph | [TechnicianReport] ✔ 完成 用时=0.00s
+2026-07-31 10:58:41 | INFO    | facilitymind.graph | [QA] ▶ 进入
+2026-07-31 10:58:41 | INFO    | facilitymind.services | [service] verify_photos → True
+2026-07-31 10:58:41 | INFO    | facilitymind.services | [service] check_sla(35min vs 2h) → True
+2026-07-31 10:58:41 | INFO    | facilitymind.services | [service] check_cost(¥2400 vs ¥2400) → True
+2026-07-31 10:58:41 | INFO    | facilitymind.graph | [QA] ✔ 完成 用时=0.00s
+2026-07-31 10:58:41 | INFO    | facilitymind.graph | [Report] ▶ 进入
+2026-07-31 10:58:41 | INFO    | facilitymind.services | [service] save_case → T-001 已存在，跳过写入
+2026-07-31 10:58:42 | INFO    | facilitymind.memory.qdrant | [qdrant] save CASE-T-001
+2026-07-31 10:58:42 | INFO    | facilitymind.memory.redis | [redis] update 迅达电梯维保 qa=True cost=2400
+2026-07-31 10:58:42 | INFO    | facilitymind.report | [Report] 工单 T-001（elevator / 紧急度 high）于 2026-07-31T10:58:41 经 system 处置，根因为「门机控制器接触不良或光幕遮挡」，由 迅达电梯维保 完成，报价 ¥2400，质检通过。 案例落库=CASE-T-001
+2026-07-31 10:58:42 | INFO    | facilitymind.graph | [Report] ✔ 完成 用时=1.32s
+2026-07-31 10:58:42 | INFO    | facilitymind.graph | [Intake] ▶ 进入
+2026-07-31 10:58:42 | INFO    | facilitymind.services | [service] classify_fault → {'type': 'charging', 'urgency': 'medium'}
+2026-07-31 10:58:42 | INFO    | facilitymind.llm | [LLM:qwen] ▶ 调用 model=qwen3.7-plus
+2026-07-31 10:58:48 | INFO    | facilitymind.llm | [LLM:qwen] ✔ 完成 316 tokens
+2026-07-31 10:58:48 | INFO    | facilitymind.intake | [Intake] LLM 输出={"type": "charging", "urgency": "high"}
+2026-07-31 10:58:48 | INFO    | facilitymind.graph | [Intake] ✔ 完成 用时=5.32s
+2026-07-31 10:58:48 | INFO    | facilitymind.graph | [Diagnose] ▶ 进入
+2026-07-31 10:58:48 | INFO    | facilitymind.diagnose | [Diagnose] ▶ 开始 ticket=T-021 类型=charging
+2026-07-31 10:58:48 | INFO    | facilitymind.tools | [tool] lookup_kb(charging) → ['root_cause', 'recommended_action', 'required_skill', 'estimated_cost', 'sla_hours']
+2026-07-31 10:58:49 | INFO    | facilitymind.tools | [tool] read_sensor(charging) 来源=mcp 行数=2 → [{'asset': 'B2-充电桩-01', 'gun_temp_C': 68, 'output_current_A': 0.0, 'error_code': 'E03过温', 'status': '异常'}, {'asset': 'B2-充电桩-02', 'gun_temp_C': 42, 'output_current_A': 32.0, 'error_code': '无', 'status': '正常'}]
+2026-07-31 10:58:49 | INFO    | facilitymind.memory.qdrant | [qdrant] recall(charging) 向量命中 2
+2026-07-31 10:58:49 | INFO    | facilitymind.tools | [tool] recall_cases(charging, 地下车库) → 2 命中
+2026-07-31 10:58:49 | INFO    | facilitymind.llm | [LLM:deepseek] ▶ 调用 model=deepseek-chat
+2026-07-31 10:58:52 | INFO    | facilitymind.llm | [LLM:deepseek] ✔ 完成 839 tokens
+2026-07-31 10:58:52 | INFO    | facilitymind.diagnose | [Diagnose][hybrid] 综合诊断 置信度=0.85
+2026-07-31 10:58:52 | INFO    | facilitymind.diagnose | [Diagnose] ✔ 完成 用时=4.68s 根因=B2-充电桩-01 配电模块过温保护触发（E03），导致输出电流为0，无法充电；充电桩-02 正常，排除整体供电故障。知识库提示枪座接触不良或配电模块过温保护，与传感器数据一致。历史案例为电梯故障，与充电桩无直接关联，但提示需专业维保。；建议=立即派持证充电桩维保人员（ev_charging）赶赴现场，检查B2-充电桩-01的枪座/线缆连接，复位配电模块并检查散热系统；若过温持续，更换配电模块。同时排查充电桩-01周边散热环境，避免多车同时充电导致过载。测试正常后恢复使用，并安抚车主。；预估¥1200；SLA 4h；置信度=0.85
+2026-07-31 10:58:52 | INFO    | facilitymind.graph | [Diagnose] ✔ 完成 用时=4.68s
+2026-07-31 10:58:52 | INFO    | facilitymind.graph | [Dispatch] ▶ 进入
+2026-07-31 10:58:52 | INFO    | facilitymind.memory.redis | [redis] seed 完成，维保商数=11
+2026-07-31 10:58:52 | INFO    | facilitymind.services | [service] rank_vendors(charging,ev_charging) → [('特来电充电运维', 0.45)]
+2026-07-31 10:58:52 | INFO    | facilitymind.llm | [LLM:zhipu] ▶ 调用 model=glm-5.2
+2026-07-31 10:59:02 | INFO    | facilitymind.llm | [LLM:zhipu] ✔ 完成 530 tokens
+2026-07-31 10:59:02 | INFO    | facilitymind.dispatch | [Dispatch] 派单 → 特来电充电运维（响应45分钟 / ¥1200）：按性价比排序，特来电充电运维 得分最高（成本¥1200 / 质量0.9 / 响应45分钟）
+2026-07-31 10:59:02 | INFO    | facilitymind.graph | [Dispatch] ✔ 完成 用时=9.09s
+2026-07-31 10:59:02 | INFO    | facilitymind.graph | [Approval] ▶ 进入
+2026-07-31 10:59:02 | INFO    | facilitymind.services | [service] check_budget(¥1200) → 需人工=False (阈值¥2000)
+2026-07-31 10:59:02 | INFO    | facilitymind.graph | [Approval] ✔ 完成 用时=0.00s
+2026-07-31 10:59:02 | INFO    | facilitymind.graph | [TechnicianReport] ▶ 进入
+2026-07-31 10:59:02 | INFO    | facilitymind.services | [service] validate_evidence → 缺失=[]
+2026-07-31 10:59:02 | INFO    | facilitymind.graph | [TechnicianReport] ✔ 完成 用时=0.00s
+2026-07-31 10:59:02 | INFO    | facilitymind.graph | [QA] ▶ 进入
+2026-07-31 10:59:02 | INFO    | facilitymind.services | [service] verify_photos → True
+2026-07-31 10:59:02 | INFO    | facilitymind.services | [service] check_sla(52min vs 4h) → True
+2026-07-31 10:59:02 | INFO    | facilitymind.services | [service] check_cost(¥1200 vs ¥1200) → True
+2026-07-31 10:59:02 | INFO    | facilitymind.graph | [QA] ✔ 完成 用时=0.00s
+2026-07-31 10:59:02 | INFO    | facilitymind.graph | [Report] ▶ 进入
+2026-07-31 10:59:02 | INFO    | facilitymind.services | [service] save_case → T-021 已存在，跳过写入
+2026-07-31 10:59:03 | INFO    | facilitymind.memory.qdrant | [qdrant] save CASE-T-021
+2026-07-31 10:59:03 | INFO    | facilitymind.memory.redis | [redis] update 特来电充电运维 qa=True cost=1200
+2026-07-31 10:59:03 | INFO    | facilitymind.report | [Report] 工单 T-021（charging / 紧急度 high）于 2026-07-31T10:59:02 经 system 处置，根因为「B2-充电桩-01 配电模块过温保护触发（E03），导致输出电流为0，无法充电；充电桩-02 正常，排除整体供电故障。知识库提示枪座接触不良或配电模块过温保护，与传感器数据一致。历史案例为电梯故障，与充电桩无直接关联，但提示需专业维保。」，由 特来电充电运维 完成，报价 ¥1200，质检通过。 案例落库=CASE-T-021
+2026-07-31 10:59:03 | INFO    | facilitymind.graph | [Report] ✔ 完成 用时=1.37s
+2026-07-31 11:00:25 | INFO    | facilitymind.graph | [Intake] ▶ 进入
+2026-07-31 11:00:25 | INFO    | facilitymind.services | [service] classify_fault → {'type': 'elevator', 'urgency': 'high'}
+2026-07-31 11:00:25 | INFO    | facilitymind.graph | [Intake] ✔ 完成 用时=0.00s
+2026-07-31 11:00:25 | INFO    | facilitymind.graph | [Diagnose] ▶ 进入
+2026-07-31 11:00:25 | INFO    | facilitymind.diagnose | [Diagnose] ▶ 开始 ticket=T-001 类型=elevator
+2026-07-31 11:00:25 | INFO    | facilitymind.tools | [tool] lookup_kb(elevator) → ['root_cause', 'recommended_action', 'required_skill', 'estimated_cost', 'sla_hours']
+2026-07-31 11:00:28 | INFO    | facilitymind.tools | [tool] read_sensor(elevator) 来源=mcp 行数=2 → [{'asset': 'A座3#梯', 'door_current_A': 28.5, 'vibration_mm_s': 4.2, 'cage_temp_C': 31.0, 'status': '异常'}, {'asset': 'B座1#梯', 'door_current_A': 12.1, 'vibration_mm_s': 1.1, 'cage_temp_C': 28.0, 'status': '正常'}]
+2026-07-31 11:00:28 | INFO    | facilitymind.memory.qdrant | [qdrant] 连接成功，集合=facility_cases
+2026-07-31 11:00:28 | INFO    | facilitymind.memory.qdrant | [qdrant] recall(回退JSONL elevator) 命中 2
+2026-07-31 11:00:28 | INFO    | facilitymind.tools | [tool] recall_cases(elevator, A座3#梯) → 2 命中
+2026-07-31 11:00:28 | INFO    | facilitymind.diagnose | [Diagnose][hybrid] 综合诊断 置信度=0.82
+2026-07-31 11:00:28 | INFO    | facilitymind.diagnose | [Diagnose] ✔ 完成 用时=2.40s 根因=门机控制器接触不良或光幕遮挡；建议=更换门机控制器并校准光幕；预估¥2400；SLA 2h；置信度=0.82
+2026-07-31 11:00:28 | INFO    | facilitymind.graph | [Diagnose] ✔ 完成 用时=2.40s
+2026-07-31 11:00:28 | INFO    | facilitymind.graph | [Dispatch] ▶ 进入
+2026-07-31 11:00:28 | INFO    | facilitymind.memory.redis | [redis] 连接成功 db=2
+2026-07-31 11:00:28 | INFO    | facilitymind.memory.redis | [redis] seed 完成，维保商数=11
+2026-07-31 11:00:28 | INFO    | facilitymind.services | [service] rank_vendors(elevator,elevator_maint) → [('迅达电梯维保', 1.0), ('日立电梯急修', 0.45)]
+2026-07-31 11:00:28 | INFO    | facilitymind.dispatch | [Dispatch] 派单 → 迅达电梯维保（响应30分钟 / ¥2400）：按性价比排序，迅达电梯维保 得分最高（成本¥2400 / 质量1.0 / 响应30分钟）
+2026-07-31 11:00:28 | INFO    | facilitymind.graph | [Dispatch] ✔ 完成 用时=0.14s
+2026-07-31 11:00:28 | INFO    | facilitymind.graph | [Approval] ▶ 进入
+2026-07-31 11:00:28 | INFO    | facilitymind.services | [service] check_budget(¥2400) → 需人工=True (阈值¥2000)
+2026-07-31 11:00:28 | INFO    | facilitymind.graph | [Approval] ✔ 完成 用时=0.00s
+2026-07-31 11:00:28 | INFO    | facilitymind.graph | [TechnicianReport] ▶ 进入
+2026-07-31 11:00:28 | INFO    | facilitymind.services | [service] validate_evidence → 缺失=[]
+2026-07-31 11:00:28 | INFO    | facilitymind.graph | [TechnicianReport] ✔ 完成 用时=0.00s
+2026-07-31 11:00:28 | INFO    | facilitymind.graph | [QA] ▶ 进入
+2026-07-31 11:00:28 | INFO    | facilitymind.services | [service] verify_photos → True
+2026-07-31 11:00:28 | INFO    | facilitymind.services | [service] check_sla(35min vs 2h) → True
+2026-07-31 11:00:28 | INFO    | facilitymind.services | [service] check_cost(¥2400 vs ¥2400) → True
+2026-07-31 11:00:28 | INFO    | facilitymind.graph | [QA] ✔ 完成 用时=0.00s
+2026-07-31 11:00:28 | INFO    | facilitymind.graph | [Report] ▶ 进入
+2026-07-31 11:00:28 | INFO    | facilitymind.services | [service] save_case → T-001 已存在，跳过写入
+2026-07-31 11:00:28 | INFO    | facilitymind.memory.redis | [redis] update 迅达电梯维保 qa=True cost=2400
+2026-07-31 11:00:28 | INFO    | facilitymind.report | [Report] 工单 T-001（elevator / 紧急度 high）于 2026-07-31T11:00:28 经 system 处置，根因为「门机控制器接触不良或光幕遮挡」，由 迅达电梯维保 完成，报价 ¥2400，质检通过。 案例落库=CASE-T-001
+2026-07-31 11:00:28 | INFO    | facilitymind.graph | [Report] ✔ 完成 用时=0.00s
+2026-07-31 11:00:28 | INFO    | facilitymind.graph | [Intake] ▶ 进入
+2026-07-31 11:00:28 | INFO    | facilitymind.services | [service] classify_fault → {'type': 'charging', 'urgency': 'medium'}
+2026-07-31 11:00:28 | INFO    | facilitymind.graph | [Intake] ✔ 完成 用时=0.00s
+2026-07-31 11:00:28 | INFO    | facilitymind.graph | [Diagnose] ▶ 进入
+2026-07-31 11:00:28 | INFO    | facilitymind.diagnose | [Diagnose] ▶ 开始 ticket=T-021 类型=charging
+2026-07-31 11:00:28 | INFO    | facilitymind.tools | [tool] lookup_kb(charging) → ['root_cause', 'recommended_action', 'required_skill', 'estimated_cost', 'sla_hours']
+2026-07-31 11:00:28 | INFO    | facilitymind.memory.qdrant | [qdrant] recall(回退JSONL charging) 命中 0
+2026-07-31 11:00:28 | INFO    | facilitymind.tools | [tool] recall_cases(charging, 地下车库) → 0 命中
+2026-07-31 11:00:29 | INFO    | facilitymind.tools | [tool] read_sensor(charging) 来源=mcp 行数=2 → [{'asset': 'B2-充电桩-01', 'gun_temp_C': 68, 'output_current_A': 0.0, 'error_code': 'E03过温', 'status': '异常'}, {'asset': 'B2-充电桩-02', 'gun_temp_C': 42, 'output_current_A': 32.0, 'error_code': '无', 'status': '正常'}]
+2026-07-31 11:00:29 | INFO    | facilitymind.diagnose | [Diagnose][hybrid] 综合诊断 置信度=0.82
+2026-07-31 11:00:29 | INFO    | facilitymind.diagnose | [Diagnose] ✔ 完成 用时=1.12s 根因=充电枪座接触不良或配电模块过温保护；建议=检查枪座/线缆连接并复位配电模块；预估¥1200；SLA 4h；置信度=0.82
+2026-07-31 11:00:29 | INFO    | facilitymind.graph | [Diagnose] ✔ 完成 用时=1.12s
+2026-07-31 11:00:29 | INFO    | facilitymind.graph | [Dispatch] ▶ 进入
+2026-07-31 11:00:29 | INFO    | facilitymind.memory.redis | [redis] seed 完成，维保商数=11
+2026-07-31 11:00:29 | INFO    | facilitymind.services | [service] rank_vendors(charging,ev_charging) → [('特来电充电运维', 0.5)]
+2026-07-31 11:00:29 | INFO    | facilitymind.dispatch | [Dispatch] 派单 → 特来电充电运维（响应45分钟 / ¥1200）：按性价比排序，特来电充电运维 得分最高（成本¥1200 / 质量1.0 / 响应45分钟）
+2026-07-31 11:00:29 | INFO    | facilitymind.graph | [Dispatch] ✔ 完成 用时=0.00s
+2026-07-31 11:00:29 | INFO    | facilitymind.graph | [Approval] ▶ 进入
+2026-07-31 11:00:29 | INFO    | facilitymind.services | [service] check_budget(¥1200) → 需人工=False (阈值¥2000)
+2026-07-31 11:00:29 | INFO    | facilitymind.graph | [Approval] ✔ 完成 用时=0.00s
+2026-07-31 11:00:29 | INFO    | facilitymind.graph | [TechnicianReport] ▶ 进入
+2026-07-31 11:00:29 | INFO    | facilitymind.services | [service] validate_evidence → 缺失=[]
+2026-07-31 11:00:29 | INFO    | facilitymind.graph | [TechnicianReport] ✔ 完成 用时=0.00s
+2026-07-31 11:00:29 | INFO    | facilitymind.graph | [QA] ▶ 进入
+2026-07-31 11:00:29 | INFO    | facilitymind.services | [service] verify_photos → True
+2026-07-31 11:00:29 | INFO    | facilitymind.services | [service] check_sla(52min vs 4h) → True
+2026-07-31 11:00:29 | INFO    | facilitymind.services | [service] check_cost(¥1200 vs ¥1200) → True
+2026-07-31 11:00:29 | INFO    | facilitymind.graph | [QA] ✔ 完成 用时=0.00s
+2026-07-31 11:00:29 | INFO    | facilitymind.graph | [Report] ▶ 进入
+2026-07-31 11:00:29 | INFO    | facilitymind.services | [service] save_case → T-021 已存在，跳过写入
+2026-07-31 11:00:29 | INFO    | facilitymind.memory.redis | [redis] update 特来电充电运维 qa=True cost=1200
+2026-07-31 11:00:29 | INFO    | facilitymind.report | [Report] 工单 T-021（charging / 紧急度 medium）于 2026-07-31T11:00:29 经 system 处置，根因为「充电枪座接触不良或配电模块过温保护」，由 特来电充电运维 完成，报价 ¥1200，质检通过。 案例落库=CASE-T-021
+2026-07-31 11:00:29 | INFO    | facilitymind.graph | [Report] ✔ 完成 用时=0.00s
+2026-07-31 11:08:28 | INFO    | facilitymind.graph | [Intake] ▶ 进入
+2026-07-31 11:08:28 | INFO    | facilitymind.services | [service] classify_fault → {'type': 'elevator', 'urgency': 'high'}
+2026-07-31 11:08:28 | INFO    | facilitymind.llm | [LLM:qwen] ▶ 调用 model=qwen3.7-plus
+2026-07-31 11:08:33 | INFO    | facilitymind.llm | [LLM:qwen] ✔ 完成 285 tokens
+2026-07-31 11:08:33 | INFO    | facilitymind.intake | [Intake] LLM 输出={"type": "elevator", "urgency": "high"}
+2026-07-31 11:08:33 | INFO    | facilitymind.graph | [Intake] ✔ 完成 用时=5.20s
+2026-07-31 11:08:33 | INFO    | facilitymind.graph | [Diagnose] ▶ 进入
+2026-07-31 11:08:33 | INFO    | facilitymind.diagnose | [Diagnose] ▶ 开始 ticket=T-001 类型=elevator
+2026-07-31 11:08:33 | INFO    | facilitymind.tools | [tool] lookup_kb(elevator) → ['root_cause', 'recommended_action', 'required_skill', 'estimated_cost', 'sla_hours']
+2026-07-31 11:08:35 | INFO    | facilitymind.memory.qdrant | [qdrant] 连接成功，集合=facility_cases
+2026-07-31 11:08:35 | INFO    | facilitymind.tools | [tool] read_sensor(elevator) 来源=mcp 行数=2 → [{'asset': 'A座3#梯', 'door_current_A': 28.5, 'vibration_mm_s': 4.2, 'cage_temp_C': 31.0, 'status': '异常'}, {'asset': 'B座1#梯', 'door_current_A': 12.1, 'vibration_mm_s': 1.1, 'cage_temp_C': 28.0, 'status': '正常'}]
+2026-07-31 11:08:36 | INFO    | facilitymind.memory.qdrant | [qdrant] recall(elevator) 向量命中 3
+2026-07-31 11:08:36 | INFO    | facilitymind.tools | [tool] recall_cases(elevator, A座3#梯) → 3 命中
+2026-07-31 11:08:36 | INFO    | facilitymind.llm | [LLM:deepseek] ▶ 调用 model=deepseek-chat
+2026-07-31 11:08:39 | INFO    | facilitymind.llm | [LLM:deepseek] ✔ 完成 1091 tokens
+2026-07-31 11:08:39 | INFO    | facilitymind.diagnose | [Diagnose][hybrid] 综合诊断 置信度=0.95
+2026-07-31 11:08:39 | INFO    | facilitymind.diagnose | [Diagnose] ✔ 完成 用时=5.83s 根因=门机控制器接触不良或光幕遮挡（与知识库及历史案例一致；传感器显示A座3#梯门电流28.5A异常偏高、振动4.2mm/s超标，与门机卡阻/控制器故障相符，B座1#梯正常作为对照，证据一致）；建议=立即派持证电梯维保人员（elevator_maint）赶赴现场，优先手动开门解救被困人员；随后更换门机控制器并校准光幕，测试正常后恢复运行。；预估¥2400；SLA 2h；置信度=0.95
+2026-07-31 11:08:39 | INFO    | facilitymind.graph | [Diagnose] ✔ 完成 用时=5.84s
+2026-07-31 11:08:39 | INFO    | facilitymind.graph | [Dispatch] ▶ 进入
+2026-07-31 11:08:39 | INFO    | facilitymind.memory.redis | [redis] 连接成功 db=2
+2026-07-31 11:08:39 | INFO    | facilitymind.memory.redis | [redis] seed 完成，维保商数=11
+2026-07-31 11:08:39 | INFO    | facilitymind.services | [service] rank_vendors(elevator,elevator_maint) → [('迅达电梯维保', 1.0), ('日立电梯急修', 0.45)]
+2026-07-31 11:08:39 | INFO    | facilitymind.llm | [LLM:zhipu] ▶ 调用 model=glm-5.2
+2026-07-31 11:08:49 | INFO    | facilitymind.llm | [LLM:zhipu] ✔ 完成 575 tokens
+2026-07-31 11:08:49 | INFO    | facilitymind.dispatch | [Dispatch] 派单 → 迅达电梯维保（响应30分钟 / ¥2400）：按性价比排序，迅达电梯维保 得分最高（成本¥2400 / 质量1.0 / 响应30分钟）
+2026-07-31 11:08:49 | INFO    | facilitymind.graph | [Dispatch] ✔ 完成 用时=10.40s
+2026-07-31 11:08:49 | INFO    | facilitymind.graph | [Approval] ▶ 进入
+2026-07-31 11:08:49 | INFO    | facilitymind.services | [service] check_budget(¥2400) → 需人工=True (阈值¥2000)
+2026-07-31 11:08:49 | INFO    | facilitymind.graph | [Approval] ✔ 完成 用时=0.00s
+2026-07-31 11:08:49 | INFO    | facilitymind.graph | [TechnicianReport] ▶ 进入
+2026-07-31 11:08:49 | INFO    | facilitymind.services | [service] validate_evidence → 缺失=[]
+2026-07-31 11:08:49 | INFO    | facilitymind.graph | [TechnicianReport] ✔ 完成 用时=0.00s
+2026-07-31 11:08:49 | INFO    | facilitymind.graph | [QA] ▶ 进入
+2026-07-31 11:08:49 | INFO    | facilitymind.services | [service] verify_photos → True
+2026-07-31 11:08:49 | INFO    | facilitymind.services | [service] check_sla(35min vs 2h) → True
+2026-07-31 11:08:49 | INFO    | facilitymind.services | [service] check_cost(¥2400 vs ¥2400) → True
+2026-07-31 11:08:49 | INFO    | facilitymind.graph | [QA] ✔ 完成 用时=0.00s
+2026-07-31 11:08:49 | INFO    | facilitymind.graph | [Report] ▶ 进入
+2026-07-31 11:08:49 | INFO    | facilitymind.services | [service] save_case → T-001 已存在，跳过写入
+2026-07-31 11:08:50 | INFO    | facilitymind.memory.qdrant | [qdrant] save CASE-T-001
+2026-07-31 11:08:50 | INFO    | facilitymind.memory.redis | [redis] update 迅达电梯维保 qa=True cost=2400
+2026-07-31 11:08:50 | INFO    | facilitymind.report | [Report] 工单 T-001（elevator / 紧急度 high）于 2026-07-31T11:08:49 经 system 处置，根因为「门机控制器接触不良或光幕遮挡（与知识库及历史案例一致；传感器显示A座3#梯门电流28.5A异常偏高、振动4.2mm/s超标，与门机卡阻/控制器故障相符，B座1#梯正常作为对照，证据一致）」，由 迅达电梯维保 完成，报价 ¥2400，质检通过。 案例落库=CASE-T-001
+2026-07-31 11:08:50 | INFO    | facilitymind.graph | [Report] ✔ 完成 用时=1.34s
+2026-07-31 11:10:53 | INFO    | facilitymind.graph | [Intake] ▶ 进入
+2026-07-31 11:10:53 | INFO    | facilitymind.services | [service] classify_fault → {'type': 'charging', 'urgency': 'medium'}
+2026-07-31 11:10:53 | INFO    | facilitymind.llm | [LLM:qwen] ▶ 调用 model=qwen3.7-plus
+2026-07-31 11:11:01 | INFO    | facilitymind.llm | [LLM:qwen] ✔ 完成 375 tokens
+2026-07-31 11:11:01 | INFO    | facilitymind.intake | [Intake] LLM 输出={"type": "charging", "urgency": "high"}
+2026-07-31 11:11:01 | INFO    | facilitymind.graph | [Intake] ✔ 完成 用时=8.12s
+2026-07-31 11:11:02 | INFO    | facilitymind.graph | [Diagnose] ▶ 进入
+2026-07-31 11:11:02 | INFO    | facilitymind.diagnose | [Diagnose] ▶ 开始 ticket=T-021 类型=charging
+2026-07-31 11:11:02 | INFO    | facilitymind.tools | [tool] lookup_kb(charging) → ['root_cause', 'recommended_action', 'required_skill', 'estimated_cost', 'sla_hours']
+2026-07-31 11:11:04 | INFO    | facilitymind.memory.qdrant | [qdrant] 连接成功，集合=facility_cases
+2026-07-31 11:11:04 | INFO    | facilitymind.tools | [tool] read_sensor(charging) 来源=mcp 行数=2 → [{'asset': 'B2-充电桩-01', 'gun_temp_C': 68, 'output_current_A': 0.0, 'error_code': 'E03过温', 'status': '异常'}, {'asset': 'B2-充电桩-02', 'gun_temp_C': 42, 'output_current_A': 32.0, 'error_code': '无', 'status': '正常'}]
+2026-07-31 11:11:05 | INFO    | facilitymind.memory.qdrant | [qdrant] recall(charging) 向量命中 3
+2026-07-31 11:11:05 | INFO    | facilitymind.tools | [tool] recall_cases(charging, 地下车库) → 3 命中
+2026-07-31 11:11:05 | INFO    | facilitymind.llm | [LLM:deepseek] ▶ 调用 model=deepseek-chat
+2026-07-31 11:11:07 | INFO    | facilitymind.llm | [LLM:deepseek] ✔ 完成 1125 tokens
+2026-07-31 11:11:07 | INFO    | facilitymind.diagnose | [Diagnose][hybrid] 综合诊断 置信度=0.95
+2026-07-31 11:11:07 | INFO    | facilitymind.diagnose | [Diagnose] ✔ 完成 用时=5.52s 根因=B2-充电桩-01 配电模块过温保护触发（E03），导致输出电流为0，无法充电；充电桩-02 正常，排除整体供电故障。知识库提示枪座接触不良或配电模块过温保护，与传感器数据一致。历史案例为电梯故障，与充电桩无直接关联，但提示需专业维保。；建议=立即派持证充电桩维保人员（ev_charging）赶赴现场，检查B2-充电桩-01的枪座/线缆连接，复位配电模块并检查散热系统；若过温持续，更换配电模块。同时排查充电桩-01周边散热环境，避免多车同时充电导致过载。测试正常后恢复使用，并安抚车主。；预估¥1200；SLA 4h；置信度=0.95
+2026-07-31 11:11:07 | INFO    | facilitymind.graph | [Diagnose] ✔ 完成 用时=5.52s
+2026-07-31 11:11:07 | INFO    | facilitymind.graph | [Dispatch] ▶ 进入
+2026-07-31 11:11:07 | INFO    | facilitymind.memory.redis | [redis] 连接成功 db=2
+2026-07-31 11:11:07 | INFO    | facilitymind.memory.redis | [redis] seed 完成，维保商数=11
+2026-07-31 11:11:07 | INFO    | facilitymind.services | [service] rank_vendors(charging,ev_charging) → [('特来电充电运维', 0.5)]
+2026-07-31 11:11:07 | INFO    | facilitymind.llm | [LLM:zhipu] ▶ 调用 model=glm-5.2
+2026-07-31 11:11:15 | INFO    | facilitymind.llm | [LLM:zhipu] ✔ 完成 537 tokens
+2026-07-31 11:11:15 | INFO    | facilitymind.dispatch | [Dispatch] 派单 → 特来电充电运维（响应45分钟 / ¥1200）：按性价比排序，特来电充电运维 得分最高（成本¥1200 / 质量1.0 / 响应45分钟）
+2026-07-31 11:11:15 | INFO    | facilitymind.graph | [Dispatch] ✔ 完成 用时=8.12s
+2026-07-31 11:11:15 | INFO    | facilitymind.graph | [Approval] ▶ 进入
+2026-07-31 11:11:15 | INFO    | facilitymind.services | [service] check_budget(¥1200) → 需人工=False (阈值¥2000)
+2026-07-31 11:11:15 | INFO    | facilitymind.graph | [Approval] ✔ 完成 用时=0.00s
+2026-07-31 11:11:15 | INFO    | facilitymind.graph | [TechnicianReport] ▶ 进入
+2026-07-31 11:11:15 | INFO    | facilitymind.services | [service] validate_evidence → 缺失=[]
+2026-07-31 11:11:15 | INFO    | facilitymind.graph | [TechnicianReport] ✔ 完成 用时=0.00s
+2026-07-31 11:11:15 | INFO    | facilitymind.graph | [QA] ▶ 进入
+2026-07-31 11:11:15 | INFO    | facilitymind.services | [service] verify_photos → True
+2026-07-31 11:11:15 | INFO    | facilitymind.services | [service] check_sla(52min vs 4h) → True
+2026-07-31 11:11:15 | INFO    | facilitymind.services | [service] check_cost(¥1200 vs ¥1200) → True
+2026-07-31 11:11:15 | INFO    | facilitymind.graph | [QA] ✔ 完成 用时=0.00s
+2026-07-31 11:11:15 | INFO    | facilitymind.graph | [Report] ▶ 进入
+2026-07-31 11:11:15 | INFO    | facilitymind.services | [service] save_case → T-021 已存在，跳过写入
+2026-07-31 11:11:17 | INFO    | facilitymind.memory.qdrant | [qdrant] save CASE-T-021
+2026-07-31 11:11:17 | INFO    | facilitymind.memory.redis | [redis] update 特来电充电运维 qa=True cost=1200
+2026-07-31 11:11:17 | INFO    | facilitymind.report | [Report] 工单 T-021（charging / 紧急度 high）于 2026-07-31T11:11:15 经 system 处置，根因为「B2-充电桩-01 配电模块过温保护触发（E03），导致输出电流为0，无法充电；充电桩-02 正常，排除整体供电故障。知识库提示枪座接触不良或配电模块过温保护，与传感器数据一致。历史案例为电梯故障，与充电桩无直接关联，但提示需专业维保。」，由 特来电充电运维 完成，报价 ¥1200，质检通过。 案例落库=CASE-T-021
+2026-07-31 11:11:17 | INFO    | facilitymind.graph | [Report] ✔ 完成 用时=1.38s
+2026-07-31 11:29:32 | INFO    | facilitymind.graph | [Intake] ▶ 进入
+2026-07-31 11:29:32 | INFO    | facilitymind.services | [service] classify_fault → {'type': 'elevator', 'urgency': 'high'}
+2026-07-31 11:29:32 | INFO    | facilitymind.llm | [LLM:qwen] ▶ 调用 model=qwen3.7-plus
+2026-07-31 11:29:38 | INFO    | facilitymind.llm | [LLM:qwen] ✔ 完成 314 tokens
+2026-07-31 11:29:38 | INFO    | facilitymind.intake | [Intake] LLM 输出={"type": "elevator", "urgency": "high"}
+2026-07-31 11:29:38 | INFO    | facilitymind.graph | [Intake] ✔ 完成 用时=5.53s
+2026-07-31 11:29:38 | INFO    | facilitymind.graph | [Diagnose] ▶ 进入
+2026-07-31 11:29:38 | INFO    | facilitymind.diagnose | [Diagnose] ▶ 开始 ticket=T-001 类型=elevator
+2026-07-31 11:29:38 | INFO    | facilitymind.tools | [tool] lookup_kb(elevator) → ['root_cause', 'recommended_action', 'required_skill', 'estimated_cost', 'sla_hours']
+2026-07-31 11:29:40 | INFO    | facilitymind.tools | [tool] read_sensor(elevator) 来源=mcp 行数=2 → [{'asset': 'A座3#梯', 'door_current_A': 28.5, 'vibration_mm_s': 4.2, 'cage_temp_C': 31.0, 'status': '异常'}, {'asset': 'B座1#梯', 'door_current_A': 12.1, 'vibration_mm_s': 1.1, 'cage_temp_C': 28.0, 'status': '正常'}]
+2026-07-31 11:29:40 | INFO    | facilitymind.memory.qdrant | [qdrant] 连接成功，集合=facility_cases
+2026-07-31 11:29:41 | INFO    | facilitymind.memory.qdrant | [qdrant] recall(elevator) 向量命中 3
+2026-07-31 11:29:41 | INFO    | facilitymind.tools | [tool] recall_cases(elevator, A座3#梯) → 3 命中
+2026-07-31 11:29:41 | INFO    | facilitymind.llm | [LLM:deepseek] ▶ 调用 model=deepseek-chat
+2026-07-31 11:29:43 | INFO    | facilitymind.llm | [LLM:deepseek] ✔ 完成 1046 tokens
+2026-07-31 11:29:43 | INFO    | facilitymind.diagnose | [Diagnose][hybrid] 综合诊断 置信度=0.95
+2026-07-31 11:29:43 | INFO    | facilitymind.diagnose | [Diagnose] ✔ 完成 用时=5.24s 根因=门机控制器接触不良或光幕遮挡（与知识库及历史案例一致；传感器显示A座3#梯门电流28.5A异常偏高、振动4.2mm/s超标，与门机卡阻/控制器故障相符，B座1#梯正常作为对照，证据一致）；建议=立即派持证电梯维保人员（elevator_maint）赶赴现场，优先手动开门解救被困人员；随后更换门机控制器并校准光幕，测试正常后恢复运行。；预估¥2400；SLA 2h；置信度=0.95
+2026-07-31 11:29:43 | INFO    | facilitymind.graph | [Diagnose] ✔ 完成 用时=5.25s
+2026-07-31 11:29:43 | INFO    | facilitymind.graph | [Dispatch] ▶ 进入
+2026-07-31 11:29:43 | INFO    | facilitymind.memory.redis | [redis] 连接成功 db=2
+2026-07-31 11:29:43 | INFO    | facilitymind.memory.redis | [redis] seed 完成，维保商数=11
+2026-07-31 11:29:43 | INFO    | facilitymind.services | [service] rank_vendors(elevator,elevator_maint) → [('迅达电梯维保', 1.0), ('日立电梯急修', 0.45)]
+2026-07-31 11:29:43 | INFO    | facilitymind.llm | [LLM:zhipu] ▶ 调用 model=glm-5.2
+2026-07-31 11:29:49 | INFO    | facilitymind.llm | [LLM:zhipu] ✔ 完成 593 tokens
+2026-07-31 11:29:49 | INFO    | facilitymind.dispatch | [Dispatch] 派单 → 迅达电梯维保（响应30分钟 / ¥2400）：按性价比排序，迅达电梯维保 得分最高（成本¥2400 / 质量1.0 / 响应30分钟）
+2026-07-31 11:29:49 | INFO    | facilitymind.graph | [Dispatch] ✔ 完成 用时=6.39s
+2026-07-31 11:29:49 | INFO    | facilitymind.graph | [Approval] ▶ 进入
+2026-07-31 11:29:49 | INFO    | facilitymind.services | [service] check_budget(¥2400) → 需人工=True (阈值¥2000)
+2026-07-31 11:29:49 | INFO    | facilitymind.graph | [Approval] ✔ 完成 用时=0.00s
+2026-07-31 11:29:49 | INFO    | facilitymind.graph | [TechnicianReport] ▶ 进入
+2026-07-31 11:29:49 | INFO    | facilitymind.services | [service] validate_evidence → 缺失=[]
+2026-07-31 11:29:49 | INFO    | facilitymind.graph | [TechnicianReport] ✔ 完成 用时=0.00s
+2026-07-31 11:29:49 | INFO    | facilitymind.graph | [QA] ▶ 进入
+2026-07-31 11:29:49 | INFO    | facilitymind.services | [service] verify_photos → True
+2026-07-31 11:29:49 | INFO    | facilitymind.services | [service] check_sla(35min vs 2h) → True
+2026-07-31 11:29:49 | INFO    | facilitymind.services | [service] check_cost(¥2400 vs ¥2400) → True
+2026-07-31 11:29:49 | INFO    | facilitymind.graph | [QA] ✔ 完成 用时=0.00s
+2026-07-31 11:29:49 | INFO    | facilitymind.graph | [Report] ▶ 进入
+2026-07-31 11:29:49 | INFO    | facilitymind.services | [service] save_case → T-001 已存在，跳过写入
+2026-07-31 11:29:51 | INFO    | facilitymind.memory.qdrant | [qdrant] save CASE-T-001
+2026-07-31 11:29:51 | INFO    | facilitymind.memory.redis | [redis] update 迅达电梯维保 qa=True cost=2400
+2026-07-31 11:29:51 | INFO    | facilitymind.report | [Report] 工单 T-001（elevator / 紧急度 high）于 2026-07-31T11:29:49 经 system 处置，根因为「门机控制器接触不良或光幕遮挡（与知识库及历史案例一致；传感器显示A座3#梯门电流28.5A异常偏高、振动4.2mm/s超标，与门机卡阻/控制器故障相符，B座1#梯正常作为对照，证据一致）」，由 迅达电梯维保 完成，报价 ¥2400，质检通过。 案例落库=CASE-T-001
+2026-07-31 11:29:51 | INFO    | facilitymind.graph | [Report] ✔ 完成 用时=1.34s
+2026-07-31 11:30:42 | INFO    | facilitymind.graph | [Intake] ▶ 进入
+2026-07-31 11:30:42 | INFO    | facilitymind.services | [service] classify_fault → {'type': 'charging', 'urgency': 'medium'}
+2026-07-31 11:30:42 | INFO    | facilitymind.llm | [LLM:qwen] ▶ 调用 model=qwen3.7-plus
+2026-07-31 11:30:50 | INFO    | facilitymind.llm | [LLM:qwen] ✔ 完成 391 tokens
+2026-07-31 11:30:50 | INFO    | facilitymind.intake | [Intake] LLM 输出={"type": "charging", "urgency": "high"}
+2026-07-31 11:30:50 | INFO    | facilitymind.graph | [Intake] ✔ 完成 用时=7.23s
+2026-07-31 11:30:50 | INFO    | facilitymind.graph | [Diagnose] ▶ 进入
+2026-07-31 11:30:50 | INFO    | facilitymind.diagnose | [Diagnose] ▶ 开始 ticket=T-021 类型=charging
+2026-07-31 11:30:50 | INFO    | facilitymind.tools | [tool] lookup_kb(charging) → ['root_cause', 'recommended_action', 'required_skill', 'estimated_cost', 'sla_hours']
+2026-07-31 11:30:52 | INFO    | facilitymind.memory.qdrant | [qdrant] 连接成功，集合=facility_cases
+2026-07-31 11:30:52 | INFO    | facilitymind.tools | [tool] read_sensor(charging) 来源=mcp 行数=2 → [{'asset': 'B2-充电桩-01', 'gun_temp_C': 68, 'output_current_A': 0.0, 'error_code': 'E03过温', 'status': '异常'}, {'asset': 'B2-充电桩-02', 'gun_temp_C': 42, 'output_current_A': 32.0, 'error_code': '无', 'status': '正常'}]
+2026-07-31 11:30:53 | INFO    | facilitymind.memory.qdrant | [qdrant] recall(charging) 向量命中 3
+2026-07-31 11:30:53 | INFO    | facilitymind.tools | [tool] recall_cases(charging, 地下车库) → 3 命中
+2026-07-31 11:30:53 | INFO    | facilitymind.llm | [LLM:deepseek] ▶ 调用 model=deepseek-chat
+2026-07-31 11:30:55 | INFO    | facilitymind.llm | [LLM:deepseek] ✔ 完成 1221 tokens
+2026-07-31 11:30:55 | INFO    | facilitymind.diagnose | [Diagnose][hybrid] 综合诊断 置信度=0.95
+2026-07-31 11:30:55 | INFO    | facilitymind.diagnose | [Diagnose] ✔ 完成 用时=5.48s 根因=B2-充电桩-01 配电模块过温保护触发（E03），导致输出电流为0，无法充电；充电桩-02 正常，排除整体供电故障。知识库提示枪座接触不良或配电模块过温保护，与传感器数据一致。历史案例为电梯故障，与充电桩无直接关联，但提示需专业维保。；建议=立即派持证充电桩维保人员（ev_charging）赶赴现场，检查B2-充电桩-01的枪座/线缆连接，复位配电模块并检查散热系统；若过温持续，更换配电模块。同时排查充电桩-01周边散热环境，避免多车同时充电导致过载。测试正常后恢复使用，并安抚车主。；预估¥1200；SLA 4h；置信度=0.95
+2026-07-31 11:30:55 | INFO    | facilitymind.graph | [Diagnose] ✔ 完成 用时=5.48s
+2026-07-31 11:30:55 | INFO    | facilitymind.graph | [Dispatch] ▶ 进入
+2026-07-31 11:30:55 | INFO    | facilitymind.memory.redis | [redis] 连接成功 db=2
+2026-07-31 11:30:55 | INFO    | facilitymind.memory.redis | [redis] seed 完成，维保商数=11
+2026-07-31 11:30:55 | INFO    | facilitymind.services | [service] rank_vendors(charging,ev_charging) → [('特来电充电运维', 0.5)]
+2026-07-31 11:30:55 | INFO    | facilitymind.llm | [LLM:zhipu] ▶ 调用 model=glm-5.2
+2026-07-31 11:31:04 | INFO    | facilitymind.llm | [LLM:zhipu] ✔ 完成 516 tokens
+2026-07-31 11:31:04 | INFO    | facilitymind.dispatch | [Dispatch] 派单 → 特来电充电运维（响应45分钟 / ¥1200）：按性价比排序，特来电充电运维 得分最高（成本¥1200 / 质量1.0 / 响应45分钟）
+2026-07-31 11:31:04 | INFO    | facilitymind.graph | [Dispatch] ✔ 完成 用时=9.02s
+2026-07-31 11:31:04 | INFO    | facilitymind.graph | [Approval] ▶ 进入
+2026-07-31 11:31:04 | INFO    | facilitymind.services | [service] check_budget(¥1200) → 需人工=False (阈值¥2000)
+2026-07-31 11:31:04 | INFO    | facilitymind.graph | [Approval] ✔ 完成 用时=0.00s
+2026-07-31 11:31:04 | INFO    | facilitymind.graph | [TechnicianReport] ▶ 进入
+2026-07-31 11:31:04 | INFO    | facilitymind.services | [service] validate_evidence → 缺失=[]
+2026-07-31 11:31:04 | INFO    | facilitymind.graph | [TechnicianReport] ✔ 完成 用时=0.00s
+2026-07-31 11:31:04 | INFO    | facilitymind.graph | [QA] ▶ 进入
+2026-07-31 11:31:04 | INFO    | facilitymind.services | [service] verify_photos → True
+2026-07-31 11:31:04 | INFO    | facilitymind.services | [service] check_sla(52min vs 4h) → True
+2026-07-31 11:31:04 | INFO    | facilitymind.services | [service] check_cost(¥1200 vs ¥1200) → True
+2026-07-31 11:31:04 | INFO    | facilitymind.graph | [QA] ✔ 完成 用时=0.00s
+2026-07-31 11:31:04 | INFO    | facilitymind.graph | [Report] ▶ 进入
+2026-07-31 11:31:04 | INFO    | facilitymind.services | [service] save_case → T-021 已存在，跳过写入
+2026-07-31 11:31:06 | INFO    | facilitymind.memory.qdrant | [qdrant] save CASE-T-021
+2026-07-31 11:31:06 | INFO    | facilitymind.memory.redis | [redis] update 特来电充电运维 qa=True cost=1200
+2026-07-31 11:31:06 | INFO    | facilitymind.report | [Report] 工单 T-021（charging / 紧急度 high）于 2026-07-31T11:31:04 经 system 处置，根因为「B2-充电桩-01 配电模块过温保护触发（E03），导致输出电流为0，无法充电；充电桩-02 正常，排除整体供电故障。知识库提示枪座接触不良或配电模块过温保护，与传感器数据一致。历史案例为电梯故障，与充电桩无直接关联，但提示需专业维保。」，由 特来电充电运维 完成，报价 ¥1200，质检通过。 案例落库=CASE-T-021
+2026-07-31 11:31:06 | INFO    | facilitymind.graph | [Report] ✔ 完成 用时=1.37s
+2026-07-31 11:31:50 | INFO    | facilitymind.graph | [Intake] ▶ 进入
+2026-07-31 11:31:50 | INFO    | facilitymind.services | [service] classify_fault → {'type': 'elevator', 'urgency': 'high'}
+2026-07-31 11:31:50 | INFO    | facilitymind.llm | [LLM:qwen] ▶ 调用 model=qwen3.7-plus
+2026-07-31 11:31:56 | INFO    | facilitymind.llm | [LLM:qwen] ✔ 完成 314 tokens
+2026-07-31 11:31:56 | INFO    | facilitymind.intake | [Intake] LLM 输出={"type": "elevator", "urgency": "high"}
+2026-07-31 11:31:56 | INFO    | facilitymind.graph | [Intake] ✔ 完成 用时=5.51s
+2026-07-31 11:31:56 | INFO    | facilitymind.graph | [Diagnose] ▶ 进入
+2026-07-31 11:31:56 | INFO    | facilitymind.diagnose | [Diagnose] ▶ 开始 ticket=T-001 类型=elevator
+2026-07-31 11:31:56 | INFO    | facilitymind.tools | [tool] lookup_kb(elevator) → ['root_cause', 'recommended_action', 'required_skill', 'estimated_cost', 'sla_hours']
+2026-07-31 11:31:58 | INFO    | facilitymind.tools | [tool] read_sensor(elevator) 来源=mcp 行数=2 → [{'asset': 'A座3#梯', 'door_current_A': 28.5, 'vibration_mm_s': 4.2, 'cage_temp_C': 31.0, 'status': '异常'}, {'asset': 'B座1#梯', 'door_current_A': 12.1, 'vibration_mm_s': 1.1, 'cage_temp_C': 28.0, 'status': '正常'}]
+2026-07-31 11:31:58 | INFO    | facilitymind.memory.qdrant | [qdrant] 连接成功，集合=facility_cases
+2026-07-31 11:31:59 | INFO    | facilitymind.memory.qdrant | [qdrant] recall(elevator) 向量命中 3
+2026-07-31 11:31:59 | INFO    | facilitymind.tools | [tool] recall_cases(elevator, A座3#梯) → 3 命中
+2026-07-31 11:31:59 | INFO    | facilitymind.llm | [LLM:deepseek] ▶ 调用 model=deepseek-chat
+2026-07-31 11:32:01 | INFO    | facilitymind.llm | [LLM:deepseek] ✔ 完成 1046 tokens
+2026-07-31 11:32:01 | INFO    | facilitymind.diagnose | [Diagnose][hybrid] 综合诊断 置信度=0.95
+2026-07-31 11:32:01 | INFO    | facilitymind.llm | [LLM:deepseek] ▶ 调用(工具) model=deepseek-chat tools=3
+2026-07-31 11:32:03 | INFO    | facilitymind.llm | [LLM:deepseek] ✔ 完成(工具) 1550 tokens 工具=['read_sensor', 'lookup_kb', 'recall_cases']
+2026-07-31 11:32:03 | INFO    | facilitymind.tools | [tool] lookup_kb(elevator) → ['root_cause', 'recommended_action', 'required_skill', 'estimated_cost', 'sla_hours']
+2026-07-31 11:32:04 | INFO    | facilitymind.tools | [tool] read_sensor(elevator) 来源=mcp 行数=2 → [{'asset': 'A座3#梯', 'door_current_A': 28.5, 'vibration_mm_s': 4.2, 'cage_temp_C': 31.0, 'status': '异常'}, {'asset': 'B座1#梯', 'door_current_A': 12.1, 'vibration_mm_s': 1.1, 'cage_temp_C': 28.0, 'status': '正常'}]
+2026-07-31 11:32:04 | INFO    | facilitymind.memory.qdrant | [qdrant] recall(elevator) 向量命中 3
+2026-07-31 11:32:04 | INFO    | facilitymind.tools | [tool] recall_cases(elevator, A座3#梯) → 3 命中
+2026-07-31 11:32:04 | INFO    | facilitymind.llm | [LLM:deepseek] ▶ 调用(工具) model=deepseek-chat tools=3
+2026-07-31 11:32:06 | INFO    | facilitymind.llm | [LLM:deepseek] ✔ 完成(工具) 2339 tokens 工具=['read_sensor', 'lookup_kb', 'recall_cases']
+2026-07-31 11:32:06 | INFO    | facilitymind.llm | [LLM:deepseek] ▶ 调用 model=deepseek-chat
+2026-07-31 11:32:08 | INFO    | facilitymind.llm | [LLM:deepseek] ✔ 完成 1835 tokens
+2026-07-31 11:32:08 | INFO    | facilitymind.diagnose | [Diagnose] ✔ 完成 用时=12.09s 根因=门机控制器接触不良或光幕遮挡（与知识库及历史案例一致；传感器显示A座3#梯门电流28.5A异常偏高、振动4.2mm/s超标，与门机卡阻/控制器故障相符，B座1#梯正常作为对照，证据一致）；建议=立即派持证电梯维保人员（elevator_maint）赶赴现场，优先手动开门解救被困人员；随后更换门机控制器并校准光幕，测试正常后恢复运行。；预估¥2400；SLA 2h；置信度=0.95
+2026-07-31 11:32:08 | INFO    | facilitymind.graph | [Diagnose] ✔ 完成 用时=12.09s
+2026-07-31 11:32:08 | INFO    | facilitymind.graph | [Dispatch] ▶ 进入
+2026-07-31 11:32:08 | INFO    | facilitymind.memory.redis | [redis] 连接成功 db=2
+2026-07-31 11:32:08 | INFO    | facilitymind.memory.redis | [redis] seed 完成，维保商数=11
+2026-07-31 11:32:08 | INFO    | facilitymind.services | [service] rank_vendors(elevator,elevator_maint) → [('迅达电梯维保', 1.0), ('日立电梯急修', 0.45)]
+2026-07-31 11:32:08 | INFO    | facilitymind.llm | [LLM:zhipu] ▶ 调用 model=glm-5.2
+2026-07-31 11:32:17 | INFO    | facilitymind.llm | [LLM:zhipu] ✔ 完成 541 tokens
+2026-07-31 11:32:17 | INFO    | facilitymind.dispatch | [Dispatch] 派单 → 迅达电梯维保（响应30分钟 / ¥2400）：按性价比排序，迅达电梯维保 得分最高（成本¥2400 / 质量1.0 / 响应30分钟）
+2026-07-31 11:32:17 | INFO    | facilitymind.graph | [Dispatch] ✔ 完成 用时=9.65s
+2026-07-31 11:32:17 | INFO    | facilitymind.graph | [Approval] ▶ 进入
+2026-07-31 11:32:17 | INFO    | facilitymind.services | [service] check_budget(¥2400) → 需人工=True (阈值¥2000)
+2026-07-31 11:32:17 | INFO    | facilitymind.graph | [Approval] ✔ 完成 用时=0.00s
+2026-07-31 11:32:17 | INFO    | facilitymind.graph | [TechnicianReport] ▶ 进入
+2026-07-31 11:32:17 | INFO    | facilitymind.services | [service] validate_evidence → 缺失=[]
+2026-07-31 11:32:17 | INFO    | facilitymind.graph | [TechnicianReport] ✔ 完成 用时=0.00s
+2026-07-31 11:32:17 | INFO    | facilitymind.graph | [QA] ▶ 进入
+2026-07-31 11:32:17 | INFO    | facilitymind.services | [service] verify_photos → True
+2026-07-31 11:32:17 | INFO    | facilitymind.services | [service] check_sla(35min vs 2h) → True
+2026-07-31 11:32:17 | INFO    | facilitymind.services | [service] check_cost(¥2400 vs ¥2400) → True
+2026-07-31 11:32:17 | INFO    | facilitymind.graph | [QA] ✔ 完成 用时=0.00s
+2026-07-31 11:32:17 | INFO    | facilitymind.graph | [Report] ▶ 进入
+2026-07-31 11:32:17 | INFO    | facilitymind.services | [service] save_case → T-001 已存在，跳过写入
+2026-07-31 11:32:19 | INFO    | facilitymind.memory.qdrant | [qdrant] save CASE-T-001
+2026-07-31 11:32:19 | INFO    | facilitymind.memory.redis | [redis] update 迅达电梯维保 qa=True cost=2400
+2026-07-31 11:32:19 | INFO    | facilitymind.report | [Report] 工单 T-001（elevator / 紧急度 high）于 2026-07-31T11:32:17 经 system 处置，根因为「门机控制器接触不良或光幕遮挡（与知识库及历史案例一致；传感器显示A座3#梯门电流28.5A异常偏高、振动4.2mm/s超标，与门机卡阻/控制器故障相符，B座1#梯正常作为对照，证据一致）」，由 迅达电梯维保 完成，报价 ¥2400，质检通过。 案例落库=CASE-T-001
+2026-07-31 11:32:19 | INFO    | facilitymind.graph | [Report] ✔ 完成 用时=1.76s
